@@ -236,3 +236,34 @@ export function validateAndSanitize<T>(schema: ZodSchema<T>, data: unknown): T {
     throw new Error('Validation failed: ' + r.error.errors.map((e) => e.message).join(', '));
   return r.data;
 }
+
+/**
+ * Recursively sanitizes all string properties in an object or array.
+ * Useful for processing entire request bodies or nested data structures.
+ */
+export function sanitizeObject<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  if (typeof data === 'string') {
+    return sanitizeHtml(data) as unknown as T;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeObject(item)) as unknown as T;
+  }
+
+  if (typeof data === 'object' && data !== null) {
+    const result: any = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        result[key] = sanitizeObject((data as any)[key]);
+      }
+    }
+    return result as T;
+  }
+
+  return data;
+}
+
