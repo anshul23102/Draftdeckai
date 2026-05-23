@@ -188,7 +188,7 @@ describe('emailSchema', () => {
 
 describe('passwordSchema', () => {
   it('accepts a valid password (upper, lower, digit)', () => {
-    expect(passwordSchema.safeParse('Passw0rd').success).toBe(true);
+    expect(passwordSchema.safeParse('Abcde1fgh').success).toBe(true);
   });
 
   it('rejects a password shorter than PASSWORD_MIN', () => {
@@ -196,15 +196,15 @@ describe('passwordSchema', () => {
   });
 
   it('rejects a password with no uppercase letter', () => {
-    expect(passwordSchema.safeParse('passw0rd').success).toBe(false);
+    expect(passwordSchema.safeParse('abcde1fgh').success).toBe(false);
   });
 
   it('rejects a password with no digit', () => {
-    expect(passwordSchema.safeParse('Password').success).toBe(false);
+    expect(passwordSchema.safeParse('Abcdefghi').success).toBe(false);
   });
 
   it('rejects a password exceeding PASSWORD_MAX', () => {
-    const long = 'Passw0rd' + 'a'.repeat(LIMITS.PASSWORD_MAX);
+    const long = 'Abcde1fgh' + 'a'.repeat(LIMITS.PASSWORD_MAX);
     expect(passwordSchema.safeParse(long).success).toBe(false);
   });
 });
