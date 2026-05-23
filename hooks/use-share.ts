@@ -23,17 +23,36 @@ export interface ShareConfig {
   emailBody?: string;
 }
 
+/** Public API returned by the useShare hook. */
 export interface UseShareReturn {
   /** True for two seconds after a successful clipboard copy. */
   copied: boolean;
+  /** Copies the given URL (or the hook default) to the clipboard. */
   copyToClipboard: (url?: string) => Promise<void>;
+  /** Opens a mailto: link with an optional subject and body. */
   shareViaEmail: (config?: Pick<ShareConfig, "url" | "emailSubject" | "emailBody">) => void;
+  /** Opens WhatsApp Web with the resolved URL always appended to the message text. */
   shareViaWhatsApp: (config?: Pick<ShareConfig, "url" | "text">) => void;
+  /** Opens the Twitter/X intent page with text and URL. */
   shareViaTwitter: (config?: Pick<ShareConfig, "url" | "text">) => void;
+  /** Opens the LinkedIn share dialog for the given URL. */
   shareViaLinkedIn: (url?: string) => void;
+  /** Opens the Facebook sharer for the given URL. */
   shareViaFacebook: (url?: string) => void;
+  /** Opens Telegram share with the resolved URL and optional text. */
   shareViaTelegram: (config?: Pick<ShareConfig, "url" | "text">) => void;
+  /** Uses the native Web Share API when available, falling back to clipboard copy. */
   shareViaWebShare: (config?: Pick<ShareConfig, "url" | "title" | "text">) => Promise<void>;
+}
+
+/**
+ * Opens a URL in a new tab with rel="noopener noreferrer" semantics to
+ * prevent the opened page from accessing window.opener.
+ *
+ * @param url - The URL to open.
+ */
+function openInNewTab(url: string): void {
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 /**
@@ -52,9 +71,14 @@ export function useShare(
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
+  /**
+   * Resolves the URL to share. Only accepts a plain string override;
+   * non-string values (e.g. event objects) are ignored and fall through
+   * to defaultUrl or window.location.href.
+   */
   const resolveUrl = useCallback(
     (override?: string): string =>
-      override ??
+      (typeof override === "string" ? override : undefined) ??
       defaultUrl ??
       (typeof window !== "undefined" ? window.location.href : ""),
     [defaultUrl]
@@ -94,7 +118,7 @@ export function useShare(
           defaults?.emailBody ??
           `I wanted to share this link with you:\n\n${url}`
       );
-      window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
+      openInNewTab(`mailto:?subject=${subject}&body=${body}`);
     },
     [resolveUrl, defaults?.emailSubject, defaults?.emailBody]
   );
@@ -102,10 +126,11 @@ export function useShare(
   const shareViaWhatsApp = useCallback(
     (config?: Pick<ShareConfig, "url" | "text">) => {
       const url = resolveUrl(config?.url);
-      const text = encodeURIComponent(
-        config?.text ?? defaults?.text ?? `Check this out: ${url}`
-      );
-      window.open(`https://wa.me/?text=${text}`, "_blank");
+      const baseText = config?.text ?? defaults?.text ?? "Check this out:";
+      // Always append the URL so it is included even when defaults.text is set.
+      const combined = baseText.includes(url) ? baseText : `${baseText} ${url}`;
+      const text = encodeURIComponent(combined);
+      openInNewTab(`https://wa.me/?text=${text}`);
     },
     [resolveUrl, defaults?.text]
   );
@@ -117,9 +142,8 @@ export function useShare(
         config?.text ?? defaults?.text ?? "Check this out!"
       );
       const encodedUrl = encodeURIComponent(url);
-      window.open(
-        `https://twitter.com/intent/tweet?text=${text}&url=${encodedUrl}`,
-        "_blank"
+      openInNewTab(
+        `https://twitter.com/intent/tweet?text=${text}&url=${encodedUrl}`
       );
     },
     [resolveUrl, defaults?.text]
@@ -128,9 +152,8 @@ export function useShare(
   const shareViaLinkedIn = useCallback(
     (url?: string) => {
       const encodedUrl = encodeURIComponent(resolveUrl(url));
-      window.open(
-        `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-        "_blank"
+      openInNewTab(
+        `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`
       );
     },
     [resolveUrl]
@@ -139,9 +162,8 @@ export function useShare(
   const shareViaFacebook = useCallback(
     (url?: string) => {
       const encodedUrl = encodeURIComponent(resolveUrl(url));
-      window.open(
-        `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-        "_blank"
+      openInNewTab(
+        `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`
       );
     },
     [resolveUrl]
@@ -154,9 +176,8 @@ export function useShare(
         config?.text ?? defaults?.text ?? "Check this out!"
       );
       const encodedUrl = encodeURIComponent(url);
-      window.open(
-        `https://t.me/share/url?url=${encodedUrl}&text=${text}`,
-        "_blank"
+      openInNewTab(
+        `https://t.me/share/url?url=${encodedUrl}&text=${text}`
       );
     },
     [resolveUrl, defaults?.text]
