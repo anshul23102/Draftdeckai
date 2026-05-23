@@ -51,7 +51,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const category = searchParams.get('category') ?? undefined
     const language = searchParams.get('language') ?? undefined
     const minQuality = Number(searchParams.get('minQuality') ?? 0)
-    
+
     // Pagination parameters with bounds: page >= 1, limit clamped to 1..100
     const page = Math.max(1, Number(searchParams.get('page')) || 1)
     const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit')) || 10))
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           }
 
           const textContent = extractTextFromContent(doc.content)
-          
+
           let score = 80
           if (doc.content && typeof doc.content === 'object' && 'atsScore' in doc.content) {
             score = Number(doc.content.atsScore) || 80

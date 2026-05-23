@@ -41,6 +41,7 @@ export default function SearchBar() {
     setLoading(true)
     setError(null)
     setSearched(true)
+    setPage(searchPage)
 
     try {
       const params = new URLSearchParams({
