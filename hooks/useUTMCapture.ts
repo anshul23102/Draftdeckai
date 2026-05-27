@@ -31,7 +31,6 @@ export function useUTMCapture() {
     // They will stay here until the user closes the tab or signs up.
     if (foundUTMs) {
       sessionStorage.setItem("draftdeck_utms", JSON.stringify(currentUTMs));
-      console.log("UTMs captured and stored!", currentUTMs); // Keep this for our local testing
     }
   }, [searchParams]);
 }

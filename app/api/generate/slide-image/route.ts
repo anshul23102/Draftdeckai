@@ -179,7 +179,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // console.log(`🎨 Generating ${parsedCount} ${imageType} image(s) for: "${topic || customPrompt}"`);
 
     // Parse size
     const [width, height] = size.split('x').map(Number);
@@ -256,7 +255,6 @@ export async function POST(request: NextRequest) {
 
     const successCount = imageResults.filter(r => r.success).length;
 
-    // console.log(`✅ Generated ${successCount}/${parsedCount} images successfully`);
 
     return Response.json({ 
       images: imageResults,

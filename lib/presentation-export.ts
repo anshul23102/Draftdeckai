@@ -307,7 +307,6 @@ export async function exportAsPPTX(
     let globalBgColor = "FFFFFF";
     let globalTextColor = "000000";
 
-    console.log("🎨 Exporting PPTX with theme:", theme);
 
     if (theme && theme.colors) {
       if (theme.id === "alien" || theme.id === "fluo" || theme.id === "vortex" || theme.type === "dark") {
@@ -323,7 +322,6 @@ export async function exportAsPPTX(
       }
     }
 
-    console.log("🎨 Calculated Colors - BG:", globalBgColor, "Text:", globalTextColor);
 
     if (globalBgColor === "FFFFFF" && globalTextColor === "FFFFFF") {
       globalTextColor = "000000";

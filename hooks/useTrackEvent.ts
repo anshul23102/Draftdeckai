@@ -29,7 +29,6 @@ export function useTrackEvent() {
     });
     
     // Console log just so we can see it working locally!
-    console.log(`📡 Event Tracked: ${eventName}`, { ...additionalProps, ...utmData });
   };
 
   return { trackEvent };

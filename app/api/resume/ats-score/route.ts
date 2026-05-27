@@ -169,7 +169,6 @@ export async function POST(req: Request) {
       if (logError) {
         logger.error({ route: 'app/api/resume/ats-score/route.ts' }, 'Failed to log credit usage:', logError);
       } else {
-        // console.log(`💳 Deducted ${creditCost} credits for ATS score calculation`);
       }
     }
 

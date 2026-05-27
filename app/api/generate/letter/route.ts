@@ -157,8 +157,7 @@ export async function POST(request: Request) {
 
     // Cover-letter branch
     if (isCoverLetter) {
-      // console.log("📝 Generating cover letter from job description with Mistral...");
-      
+
       const coverJobDescription = jobDescription as string;
       const coverFromName = fromName as string;
 
@@ -196,7 +195,6 @@ export async function POST(request: Request) {
     }
 
     // Standard letter generation
-    // console.log(`📝 Generating ${letterType} letter with Mistral...`);
     const standardPrompt = prompt as string;
     const standardFromName = fromName as string;
     const standardToName = toName as string;
@@ -241,7 +239,6 @@ export async function POST(request: Request) {
       content: letter.content || "Letter content not available.",
     };
 
-    // console.log("✅ Letter generated successfully with Mistral");
 
     // Fire-and-forget: log write does not block the response
     if (!hasUnlimitedCredits) {
