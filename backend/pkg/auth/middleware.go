@@ -24,10 +24,16 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 // RequireAuth verifies the Supabase JWT Bearer token, extracts
+// user claims, and attaches them to the request context.
+// Returns a middleware that returns 401 if the token is missing or invalid.
 func RequireAuth() func(http.Handler) http.Handler {
 	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
 	if jwtSecret == "" {
-		panic("SUPABASE_JWT_SECRET environment variable is not set")
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				writeError(w, http.StatusInternalServerError, "Server configuration error: JWT secret not set")
+			})
+		}
 	}
 
 	return func(next http.Handler) http.Handler {

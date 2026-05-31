@@ -1,3 +1,11 @@
+// DEPRECATED: This is a duplicate entrypoint.
+// The canonical server is at backend/go/cmd/server/main.go.
+// This file is kept for backward compatibility only.
+// It will be removed after the migration is complete.
+//
+// To run the Go backend:
+//
+//	cd backend/go/cmd/server && go run .
 package main
 
 import (
@@ -15,29 +23,25 @@ import (
 )
 
 func main() {
+	log.Println("WARNING: backend/main.go is deprecated — use backend/go/cmd/server/main.go instead")
+
 	r := chi.NewRouter()
 
-	// A good base middleware stack
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Public routes
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "service": "Draftdeckai Go Backend"})
 	})
 
-	// Protected API routes
 	r.Route("/api", func(r chi.Router) {
-		// Mount the Supabase JWT Authentication middleware
 		r.Use(auth.RequireAuth())
 
-		// Example protected endpoint
 		r.Get("/user", func(w http.ResponseWriter, r *http.Request) {
-			// Extract the verified user from the context
 			user := auth.UserFromContext(r.Context())
 			if user == nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -47,7 +51,6 @@ func main() {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			// Return the verified user details
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"message": "Successfully authenticated",
 				"user":    user,
