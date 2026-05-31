@@ -472,4 +472,7 @@ globalThis.mcpServer = mcpServer;
 // Auto-start server
 mcpServer.start();
 
+// Export for the ES-module background service worker.
+export { mcpServer, MCPServer };
+
 console.log('🚀 MCP Server module loaded');
