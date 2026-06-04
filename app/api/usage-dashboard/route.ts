@@ -33,28 +33,32 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const range = url.searchParams.get('range') || '30d';
 
-    // Calculate date range
-    const now = new Date();
     const daysBack = range === '7d' ? 7 : range === '90d' ? 90 : 30;
-    const since = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+
+    // FIX 1: Align query window to UTC calendar-day boundaries so the fetched
+    // rows exactly match the daily buckets rendered in the chart.
+    // We want `daysBack` complete UTC days, starting at midnight UTC today-daysBack.
+    const nowUtc = new Date();
+    const todayUtc = new Date(
+      Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), nowUtc.getUTCDate())
+    );
+    const sinceUtc = new Date(todayUtc.getTime() - (daysBack - 1) * 24 * 60 * 60 * 1000);
+    const since = sinceUtc.toISOString(); // midnight UTC on the first bucket day
 
     // Run all queries in parallel for performance
     const [creditsResult, documentsResult, creditLogResult] = await Promise.all([
-      // Credit info
       supabase
         .from('user_credits')
         .select('tier, credits_used, credits_total, credits_reset_at, subscription_status')
         .eq('user_id', user.id)
         .single(),
 
-      // All user documents
       supabase
         .from('documents')
         .select('id, title, type, created_at, template_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false }),
 
-      // Credit usage log within range
       supabase
         .from('credit_usage_log')
         .select('credits_used, action_type, created_at, metadata')
@@ -63,9 +67,28 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: true }),
     ]);
 
+    // FIX 2: Surface Supabase query errors instead of silently falling back to
+    // empty arrays, which would misreport backend failures as "no usage".
+    if (documentsResult.error) {
+      logger.error(
+        { route: 'app/api/usage-dashboard/route.ts' },
+        'Failed to fetch documents:',
+        documentsResult.error
+      );
+      return NextResponse.json({ error: 'Failed to load documents' }, { status: 500 });
+    }
+    if (creditLogResult.error) {
+      logger.error(
+        { route: 'app/api/usage-dashboard/route.ts' },
+        'Failed to fetch credit log:',
+        creditLogResult.error
+      );
+      return NextResponse.json({ error: 'Failed to load credit history' }, { status: 500 });
+    }
+
     const credits = creditsResult.data;
-    const documents = documentsResult.data || [];
-    const creditLog = creditLogResult.data || [];
+    const documents = documentsResult.data ?? [];
+    const creditLog = creditLogResult.data ?? [];
 
     // --- Credit summary ---
     const creditsTotal = credits?.credits_total ?? 0;
@@ -83,25 +106,29 @@ export async function GET(request: Request) {
       count,
     }));
 
-    // --- Credit usage over time (grouped by day) ---
+    // --- Credit usage over time (grouped by UTC day) ---
     const usageByDay: Record<string, number> = {};
     for (const entry of creditLog) {
-      const day = entry.created_at.slice(0, 10); // YYYY-MM-DD
+      // created_at from Supabase is an ISO string; slice to UTC date
+      const day = entry.created_at.slice(0, 10); // YYYY-MM-DD (UTC)
       usageByDay[day] = (usageByDay[day] || 0) + (entry.credits_used || 0);
     }
 
-    // Fill in missing days with 0 for a continuous timeline
+    // Fill in missing UTC calendar days with 0 for a continuous timeline.
+    // Iterate from todayUtc backwards to sinceUtc to match the query window exactly.
     const creditUsageOverTime: { date: string; credits: number }[] = [];
-    for (let i = daysBack - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dayStr = d.toISOString().slice(0, 10);
+    for (let i = 0; i < daysBack; i++) {
+      const d = new Date(sinceUtc.getTime() + i * 24 * 60 * 60 * 1000);
+      const dayStr = d.toISOString().slice(0, 10); // YYYY-MM-DD UTC
       creditUsageOverTime.push({ date: dayStr, credits: usageByDay[dayStr] || 0 });
     }
 
     // --- Most used AI models ---
     const modelCounts: Record<string, number> = {};
     for (const entry of creditLog) {
-      const model: string = (entry.metadata as { model?: string })?.model || 'gemini';
+      // FIX 3: Don't attribute missing model metadata to 'gemini'; use 'unknown'
+      // to avoid inflating any specific model's count.
+      const model: string = (entry.metadata as { model?: string } | null)?.model || 'unknown';
       modelCounts[model] = (modelCounts[model] || 0) + 1;
     }
     const topModels = Object.entries(modelCounts)
@@ -110,10 +137,15 @@ export async function GET(request: Request) {
       .slice(0, 5);
 
     // --- Most used action types ---
+    // FIX 5: Track the true total before slicing so the UI can display an
+    // accurate "AI Generations" count regardless of how many distinct action
+    // types exist.
     const actionCounts: Record<string, number> = {};
+    let totalGenerations = 0;
     for (const entry of creditLog) {
       const action = entry.action_type || 'unknown';
       actionCounts[action] = (actionCounts[action] || 0) + 1;
+      totalGenerations += 1;
     }
     const topActions = Object.entries(actionCounts)
       .map(([action, count]) => ({ action, count }))
@@ -151,6 +183,7 @@ export async function GET(request: Request) {
         subscriptionStatus: credits?.subscription_status || 'active',
       },
       totalDocuments: documents.length,
+      totalGenerations,
       documentTypeBreakdown,
       creditUsageOverTime,
       topModels,
@@ -160,9 +193,11 @@ export async function GET(request: Request) {
       range,
     });
   } catch (error: unknown) {
+    // FIX 4: Log the real error server-side but return a generic message to
+    // the client to avoid leaking internal implementation details.
     logger.error({ route: 'app/api/usage-dashboard/route.ts' }, 'Usage dashboard API error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: 'An unexpected error occurred. Please try again later.' },
       { status: 500 }
     );
   }

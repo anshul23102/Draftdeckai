@@ -49,6 +49,9 @@ interface CreditInfo {
 interface UsageData {
   credits: CreditInfo;
   totalDocuments: number;
+  // FIX 5 (component): totalGenerations is supplied by the API and reflects ALL
+  // action types, not just the top-5 slice exposed in topActions.
+  totalGenerations: number;
   documentTypeBreakdown: { type: string; count: number }[];
   creditUsageOverTime: { date: string; credits: number }[];
   topModels: { model: string; count: number }[];
@@ -180,6 +183,14 @@ function CreditMeter({ credits }: { credits: CreditInfo }) {
   );
 }
 
+// ─── Supabase client ──────────────────────────────────────────────────────────
+// FIX 1 (component): Create the client once at module scope so it is a stable
+// reference. Calling createClient() inside the component body produced a new
+// object on every render, making `supabase` appear in the useCallback deps
+// array and causing fetchData — and therefore the useEffect — to re-run on
+// every render, creating an infinite refetch loop.
+const supabaseClient = createClient();
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function UsageDashboard() {
@@ -188,7 +199,6 @@ export default function UsageDashboard() {
   const [range, setRange] = useState("30d");
   const [isExporting, setIsExporting] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const fetchData = useCallback(
     async (selectedRange: string) => {
@@ -196,7 +206,7 @@ export default function UsageDashboard() {
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await supabaseClient.auth.getSession();
         if (!session) {
           router.push("/auth/signin");
           return;
@@ -215,7 +225,7 @@ export default function UsageDashboard() {
         setIsLoading(false);
       }
     },
-    [router, supabase]
+    [router]
   );
 
   useEffect(() => {
@@ -282,10 +292,14 @@ export default function UsageDashboard() {
       ? Math.round((data.credits.used / data.credits.total) * 100)
       : 0;
 
-  // Format date labels for chart
+  // FIX 3 (component): Parse YYYY-MM-DD strings in UTC so that toLocaleDateString
+  // does not shift the displayed day for users in negative UTC-offset timezones.
+  // The API derives all dates via toISOString().slice(0,10) (UTC), so we must
+  // interpret them as UTC midnight to keep chart labels consistent.
   const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const d = new Date(Date.UTC(year, month - 1, day));
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   };
 
   return (
@@ -399,10 +413,14 @@ export default function UsageDashboard() {
                   gradient="from-violet-500/20 to-purple-500/20"
                   delay={0.2}
                 />
+                {/* FIX 2 (component): Use server-supplied totalGenerations which
+                     counts ALL action_type rows, not just the top-5 slice that
+                     topActions exposes. Summing topActions undercounted when
+                     there were more than 5 distinct action types. */}
                 <StatCard
                   icon={Zap}
                   label="AI Generations"
-                  value={data.topActions.reduce((s, a) => s + a.count, 0).toLocaleString()}
+                  value={data.totalGenerations.toLocaleString()}
                   sub={`Last ${range}`}
                   gradient="from-amber-500/20 to-orange-500/20"
                   delay={0.3}
