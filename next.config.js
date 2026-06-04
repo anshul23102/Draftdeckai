@@ -2,6 +2,18 @@ import withPWACore from 'next-pwa';
 import { withSentryConfig } from '@sentry/nextjs';
 import { STATIC_SECURITY_HEADERS } from './lib/security-headers.mjs';
 
+const draftdeckRuntimeEnv = process.env.DRAFTDECK_RUNTIME_ENV?.trim();
+const isProductionLikeRuntime =
+  (!!draftdeckRuntimeEnv && draftdeckRuntimeEnv !== 'development')
+  || process.env.NODE_ENV === 'production'
+  || process.env.npm_lifecycle_event === 'start';
+
+if (isProductionLikeRuntime && process.env.DEVELOPER_BYPASS_EMAILS?.trim()) {
+  throw new Error(
+    'Security misconfiguration: DEVELOPER_BYPASS_EMAILS must not be set in production. Use auditable grants instead.'
+  );
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
