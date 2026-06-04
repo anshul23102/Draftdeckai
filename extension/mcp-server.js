@@ -465,10 +465,14 @@ class MCPServer {
 // Create global instance
 const mcpServer = new MCPServer();
 
+// Expose the server to other classic popup scripts without using module syntax.
+globalThis.MCPServer = MCPServer;
+globalThis.mcpServer = mcpServer;
+
 // Auto-start server
 mcpServer.start();
 
-// Export for external use
+// Export for the ES-module background service worker.
 export { mcpServer, MCPServer };
 
 console.log('🚀 MCP Server module loaded');
