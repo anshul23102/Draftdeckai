@@ -948,13 +948,13 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
 
                     <Button
                       onClick={generateDiagramFromPrompt}
-                      disabled={isGenerating || !prompt.trim()}
+                      disabled={!prompt.trim()}
+                      isLoading={isGenerating}
                       aria-label="Generate diagram from prompt"
                       className="w-full bolt-gradient text-white font-semibold hover:scale-105 transition-all duration-300"
                     >
                       {isGenerating ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Generating with AI...
                         </>
                       ) : (
@@ -1011,13 +1011,13 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
                   />
                   <Button
                     onClick={generateDiagramFromPrompt}
-                    disabled={isGenerating || !prompt.trim()}
+                    disabled={!prompt.trim()}
+                    isLoading={isGenerating}
                     aria-label="Generate diagram from prompt"
                     className="w-full bolt-gradient text-white font-semibold hover:scale-105 transition-all duration-300"
                   >
                     {isGenerating ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Generating with AI...
                       </>
                     ) : (
@@ -1039,28 +1039,32 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
                     <Button
                       variant="outline"
                       onClick={() => exportDiagram('png')}
-                      disabled={exportingFormat === 'png'}
+                      isLoading={exportingFormat === 'png'}
                       className="glass-effect border-yellow-400/30 hover:border-yellow-400/60 min-h-[44px]"
                     >
                       {exportingFormat === 'png' ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        "Export PNG"
                       ) : (
-                        <FileImage className="mr-2 h-4 w-4" />
+                        <>
+                          <FileImage className="mr-2 h-4 w-4" />
+                          Export PNG
+                        </>
                       )}
-                      Export PNG
                     </Button>
                     <Button
                       variant="outline"
                       onClick={() => exportDiagram('svg')}
-                      disabled={exportingFormat === 'svg'}
+                      isLoading={exportingFormat === 'svg'}
                       className="glass-effect border-yellow-400/30 hover:border-yellow-400/60 min-h-[44px]"
                     >
                       {exportingFormat === 'svg' ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        "Export SVG"
                       ) : (
-                        <Download className="mr-2 h-4 w-4" />
+                        <>
+                          <Download className="mr-2 h-4 w-4" />
+                          Export SVG
+                        </>
                       )}
-                      Export SVG
                     </Button>
                     <Button
                       variant="outline"
@@ -1078,15 +1082,17 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
                     <Button
                       variant="outline"
                       onClick={saveDiagram}
-                      disabled={isSavingDiagram}
+                      isLoading={isSavingDiagram}
                       className="glass-effect border-yellow-400/30 hover:border-yellow-400/60 min-h-[44px]"
                     >
                       {isSavingDiagram ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        "Save"
                       ) : (
-                        <Save className="mr-2 h-4 w-4" />
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save
+                        </>
                       )}
-                      Save
                     </Button>
                     <Button
                       variant="outline"
@@ -1145,28 +1151,32 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
                   <Button
                     variant="outline"
                     onClick={() => exportDiagram('png')}
-                    disabled={exportingFormat === 'png'}
+                    isLoading={exportingFormat === 'png'}
                     className="glass-effect border-yellow-400/30 hover:border-yellow-400/60"
                   >
                     {exportingFormat === 'png' ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      "Export PNG"
                     ) : (
-                      <FileImage className="mr-2 h-4 w-4" />
+                      <>
+                        <FileImage className="mr-2 h-4 w-4" />
+                        Export PNG
+                      </>
                     )}
-                    Export PNG
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => exportDiagram('svg')}
-                    disabled={exportingFormat === 'svg'}
+                    isLoading={exportingFormat === 'svg'}
                     className="glass-effect border-yellow-400/30 hover:border-yellow-400/60"
                   >
                     {exportingFormat === 'svg' ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      "Export SVG"
                     ) : (
-                      <Download className="mr-2 h-4 w-4" />
+                      <>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export SVG
+                      </>
                     )}
-                    Export SVG
                   </Button>
                   <Button
                     variant="outline"
@@ -1184,15 +1194,17 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
                   <Button
                     variant="outline"
                     onClick={saveDiagram}
-                    disabled={isSavingDiagram}
+                    isLoading={isSavingDiagram}
                     className="glass-effect border-yellow-400/30 hover:border-yellow-400/60"
                   >
                     {isSavingDiagram ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      "Save"
                     ) : (
-                      <Save className="mr-2 h-4 w-4" />
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save
+                      </>
                     )}
-                    Save
                   </Button>
                   <Button
                     variant="outline"
@@ -1236,15 +1248,17 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
               <Button
                 variant="outline"
                 onClick={loadSavedDiagrams}
-                disabled={isLoadingDiagrams}
+                isLoading={isLoadingDiagrams}
                 className="glass-effect border-yellow-400/30 hover:border-yellow-400/60"
               >
                 {isLoadingDiagrams ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  "Refresh"
                 ) : (
-                  <Database className="mr-2 h-4 w-4" />
+                  <>
+                    <Database className="mr-2 h-4 w-4" />
+                    Refresh
+                  </>
                 )}
-                Refresh
               </Button>
             </div>
 
@@ -1290,15 +1304,18 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
               <Button
                 variant="outline"
                 onClick={() => loadDiagramVersions()}
-                disabled={isLoadingVersions || !currentDiagramId}
+                disabled={!currentDiagramId}
+                isLoading={isLoadingVersions}
                 className="glass-effect border-yellow-400/30 hover:border-yellow-400/60"
               >
                 {isLoadingVersions ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  "Refresh"
                 ) : (
-                  <History className="mr-2 h-4 w-4" />
+                  <>
+                    <History className="mr-2 h-4 w-4" />
+                    Refresh
+                  </>
                 )}
-                Refresh
               </Button>
             </div>
 
@@ -1351,15 +1368,18 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
               <Button
                 variant="outline"
                 onClick={() => loadDiagramComments()}
-                disabled={isLoadingComments || !currentDiagramId}
+                disabled={!currentDiagramId}
+                isLoading={isLoadingComments}
                 className="glass-effect border-yellow-400/30 hover:border-yellow-400/60"
               >
                 {isLoadingComments ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  "Refresh"
                 ) : (
-                  <MessageSquare className="mr-2 h-4 w-4" />
+                  <>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Refresh
+                  </>
                 )}
-                Refresh
               </Button>
             </div>
 
@@ -1415,15 +1435,18 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
                   />
                   <Button
                     onClick={submitComment}
-                    disabled={!currentDiagramId || !commentBody.trim() || isSubmittingComment}
+                    disabled={!currentDiagramId || !commentBody.trim()}
+                    isLoading={isSubmittingComment}
                     className="bolt-gradient text-white font-semibold"
                   >
                     {isSubmittingComment ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      "Submit"
                     ) : (
-                      <MessageSquare className="mr-2 h-4 w-4" />
+                      <>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Submit
+                      </>
                     )}
-                    Submit
                   </Button>
                 </div>
               </>
@@ -1469,16 +1492,18 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
                 </Button>
                 <Button
                   onClick={saveDiagram}
-                  disabled={isSavingDiagram}
+                  isLoading={isSavingDiagram}
                   variant="outline"
                   className="glass-effect border-yellow-400/30 hover:border-yellow-400/60 text-sm sm:text-base py-2 sm:py-3"
                 >
                   {isSavingDiagram ? (
-                    <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                    "Save"
                   ) : (
-                    <Save className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                    <>
+                      <Save className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                      Save
+                    </>
                   )}
-                  Save
                 </Button>
                 <Button
                   onClick={() => exportDiagram('svg')}
