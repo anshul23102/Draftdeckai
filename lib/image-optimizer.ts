@@ -56,12 +56,13 @@ export async function createResponsiveImageVariants(
   const formats = options.formats || ["webp", "avif", "jpeg"];
   const source = sharp(input, { failOn: "none" }).rotate();
   const metadata = await source.metadata();
+  const sourceWidth = metadata.autoOrient?.width || metadata.width;
   const variants: OptimizedImageVariant[] = [];
 
   for (const [name, config] of Object.entries(IMAGE_VARIANTS) as Array<
     [ImageVariantName, (typeof IMAGE_VARIANTS)[ImageVariantName]]
   >) {
-    const targetWidth = Math.min(config.width, metadata.width || config.width);
+    const targetWidth = Math.min(config.width, sourceWidth || config.width);
 
     for (const format of formats) {
       const resized = source.clone().resize({
