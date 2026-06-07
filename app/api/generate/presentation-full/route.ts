@@ -21,8 +21,8 @@ function mapLegacySlides(outlines: any[]) {
       content: outline.content || outline.description || '',
       bullets: outline.bullets || outline.bulletPoints || [],
       charts: outline.chartData || null,
-      getSlidePlaceholder(`Slide ${index + 1}`)
-      layout: outline.layout || outline.type || 'title-content',
+        image: outline.image || outline.imageUrl || getSlidePlaceholder(`Slide ${index + 1}`),
+        layout: outline.layout || outline.type || 'title-content',
       imagePrompt: outline.imageQuery || outline.imagePrompt || ''
     };
   });
