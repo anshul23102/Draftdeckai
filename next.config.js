@@ -1,12 +1,24 @@
 import withPWACore from 'next-pwa';
 import { withSentryConfig } from '@sentry/nextjs';
 import { CSP_HEADER } from './lib/csp.mjs';
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+/**
+ * Bundle Analyzer Configuration
+ * To run the bundle analyzer, use the following command:
+ * npm run analyze
+ * This will generate HTML reports in the .next/analyze/ directory.
+ * It has zero impact on standard production builds when ANALYZE is not set.
+ */
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: ['https://kindlier-tawna-nontypographic.ngrok-free.dev'],
-images: {
+  images: {
     unoptimized: false,
     remotePatterns: [
       {
@@ -35,7 +47,7 @@ images: {
       },
     ],
   },
-trailingSlash: false,
+  trailingSlash: false,
   // Optimize for production
   swcMinify: true,
   compress: true,
@@ -74,7 +86,7 @@ trailingSlash: false,
     tsconfigPath: './tsconfig.build.json',
     ignoreBuildErrors: true,
   },
-webpack: (config, { isServer }) => {
+  webpack: (config, { isServer }) => {
     config.module.rules.push({
       test: /\.pdf$/,
       type: 'asset/resource',
@@ -193,7 +205,9 @@ const withPWA = withPWACore({
   ],
 });
 
-const pwaConfig = withPWA(nextConfig);
+// Chain the wrappers: Analyzer -> PWA -> Sentry
+const analyzedConfig = withBundleAnalyzer(nextConfig);
+const pwaConfig = withPWA(analyzedConfig);
 
 export default withSentryConfig(pwaConfig, {
   // For all available options, see:
