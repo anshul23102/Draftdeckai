@@ -1,4 +1,4 @@
-module github.com/ItsAbir005/Draftdeckai/backend
+module github.com/Muneerali199/Draftdeckai/backend
 
 go 1.21
 

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ItsAbir005/Draftdeckai/backend/go/middleware"
+	"github.com/Muneerali199/Draftdeckai/backend/go/middleware"
 )
 
 func SetupRouter() http.Handler {

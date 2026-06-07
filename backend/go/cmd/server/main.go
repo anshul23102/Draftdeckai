@@ -16,7 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/ItsAbir005/Draftdeckai/backend/pkg/auth"
+	"github.com/Muneerali199/Draftdeckai/backend/pkg/auth"
 )
 
 // requiredEnvVars lists environment variables that must be set for the server to start.
