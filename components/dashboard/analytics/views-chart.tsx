@@ -11,11 +11,36 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format, parseISO } from "date-fns";
+import { Loader2, TrendingUp } from "lucide-react";
 
 /**
  * Responsive area chart showing document views and unique visitors
  */
-export function ViewsChart({ data }: { data: any[] }) {
+export function ViewsChart({
+  data,
+  isLoading = false,
+  error,
+}: {
+  data: any[];
+  isLoading?: boolean;
+  error?: string | null;
+}) {
+  if (isLoading) {
+    return (
+      <Card className="flex h-[400px] items-center justify-center border border-border/40 glass-effect">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="h-[400px] border border-border/40 glass-effect p-6">
+        <ErrorMessage title="Could not load view data" message={error} />
+      </Card>
+    );
+  }
+
   if (!data || data.length === 0) {
     return (
       <Card className="h-[400px] glass-effect flex items-center justify-center border border-border/40">
