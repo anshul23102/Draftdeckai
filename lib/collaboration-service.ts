@@ -64,6 +64,9 @@ export class CollaborationService {
   private sessionId: string | null = null;
   private diagramChangeCallbacks: Array<(change: DiagramChange) => void> = [];
   private diagramChangeListenerAttached = false;
+  private pendingChanges: Omit<DocumentChange, "id" | "timestamp">[] = [];
+  private isConnected = true;
+  private reconnectCallbacks: Array<() => void> = [];
 
   /**
    * Create a new collaboration session
@@ -206,6 +209,10 @@ export class CollaborationService {
    */
   async broadcastChange(change: Omit<DocumentChange, 'id' | 'timestamp'>): Promise<void> {
     if (!this.channel) return;
+    if (!this.isConnected) {
+      this.pendingChanges.push(change);
+      return;
+    }
 
     const fullChange: DocumentChange = {
       ...change,
@@ -405,6 +412,34 @@ export class CollaborationService {
   }
 
   /**
+   * Handle disconnect - preserve pending changes
+   */
+  onDisconnect(): void {
+    this.isConnected = false;
+    // Do NOT clear pendingChanges here
+  }
+
+  /**
+   * Handle reconnect - replay pending changes
+   */
+  async onReconnect(): Promise<void> {
+    this.isConnected = true;
+    const queued = [...this.pendingChanges];
+    this.pendingChanges = [];
+    for (const change of queued) {
+      await this.broadcastChange(change);
+    }
+    this.reconnectCallbacks.forEach(cb => cb());
+  }
+
+  /**
+   * Register a callback to run after reconnect
+   */
+  onReconnected(cb: () => void): void {
+    this.reconnectCallbacks.push(cb);
+  }
+
+  /**
    * Cleanup
    */
   cleanup(): void {
@@ -415,6 +450,9 @@ export class CollaborationService {
     this.sessionId = null;
     this.diagramChangeCallbacks = [];
     this.diagramChangeListenerAttached = false;
+    this.pendingChanges = [];
+    this.isConnected = true;
+    this.reconnectCallbacks = [];
   }
 }
 
