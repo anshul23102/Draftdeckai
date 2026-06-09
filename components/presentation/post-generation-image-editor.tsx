@@ -56,8 +56,9 @@ export function PostGenerationImageEditor({
     try {
       // Get 9 AI-powered suggestions
       const res = await fetch('/api/presentations/generate-alternative-images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slideTitle, slideContent, count: 9 }) });
+      if (!res.ok) throw new Error('Failed to fetch image suggestions');
       const data = await res.json();
-      const suggestions = data.images;
+      const suggestions = Array.isArray(data.images) ? data.images : [];
 
       // Fetch images for each suggestion
       const imagePromises = suggestions.map(async (suggestion) => {

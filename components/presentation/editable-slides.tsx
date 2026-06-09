@@ -97,8 +97,9 @@ export function EditableSlideCard({ slide, index, onUpdate, onDelete }: Editable
     try {
       // Generate AI-powered image suggestions
       const res = await fetch('/api/presentations/generate-alternative-images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slideTitle: editedSlide.title, slideContent: editedSlide.content || editedSlide.bulletPoints?.join(', ') || '', count: 6 }) });
+      if (!res.ok) throw new Error('Failed to fetch image suggestions');
       const data = await res.json();
-      const suggestions = data.images;
+      const suggestions = Array.isArray(data.images) ? data.images : [];
 
       // Fetch actual images from Unsplash for each suggestion
       const imagePromises = suggestions.map(async (suggestion) => {
