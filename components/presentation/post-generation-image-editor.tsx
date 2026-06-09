@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { searchImages } from "@/lib/unsplash";
-import { generateAlternativeImages } from "@/lib/mistral";
+
 import { cn } from "@/lib/utils";
 
 interface ImageEditorProps {
@@ -55,11 +55,9 @@ export function PostGenerationImageEditor({
     setIsLoadingAI(true);
     try {
       // Get 9 AI-powered suggestions
-      const suggestions = await generateAlternativeImages(
-        slideTitle,
-        slideContent,
-        9
-      );
+      const res = await fetch('/api/presentations/generate-alternative-images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slideTitle, slideContent, count: 9 }) });
+      const data = await res.json();
+      const suggestions = data.images;
 
       // Fetch images for each suggestion
       const imagePromises = suggestions.map(async (suggestion) => {
