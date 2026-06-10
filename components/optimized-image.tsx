@@ -1,7 +1,7 @@
 "use client";
 
 import Image, { type ImageProps } from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
 
 export interface OptimizedImageSource {
   url?: string;
@@ -39,6 +39,11 @@ export function OptimizedImage({
   fallbackSrc,
   sizes = "(max-width: 768px) 100vw, 50vw",
   loading = "lazy",
+  onError,
+  className,
+  style,
+  width,
+  height,
   ...props
 }: OptimizedImageProps) {
   const [currentSrc, setCurrentSrc] = useState(src);
@@ -49,6 +54,31 @@ export function OptimizedImage({
     setCurrentSrc(src);
   }, [src]);
 
+  const handleError = (event: SyntheticEvent<HTMLImageElement, Event>) => {
+    onError?.(event);
+    if (fallbackSrc && currentSrc !== fallbackSrc) {
+      setCurrentSrc(fallbackSrc);
+    }
+  };
+
+  if (shouldUseVariants) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- custom storage srcSet variants are pre-generated and must be forwarded directly.
+      <img
+        src={currentSrc}
+        srcSet={srcSet}
+        sizes={typeof sizes === "string" ? sizes : undefined}
+        alt={alt}
+        loading={loading}
+        className={className}
+        style={style}
+        width={typeof width === "number" ? width : undefined}
+        height={typeof height === "number" ? height : undefined}
+        onError={handleError}
+      />
+    );
+  }
+
   return (
     <Image
       {...props}
@@ -56,12 +86,11 @@ export function OptimizedImage({
       alt={alt}
       sizes={sizes}
       loading={loading}
-      onError={() => {
-        if (fallbackSrc && currentSrc !== fallbackSrc) {
-          setCurrentSrc(fallbackSrc);
-        }
-      }}
-      {...(shouldUseVariants ? { srcSet } : {})}
+      className={className}
+      style={style}
+      width={width}
+      height={height}
+      onError={handleError}
     />
   );
 }
