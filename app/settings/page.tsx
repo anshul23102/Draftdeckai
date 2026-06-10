@@ -6,10 +6,12 @@ import { useAuth } from "@/components/auth-provider";
 import { useTheme } from "@/hooks/use-theme";
 import { useUsageStats } from "@/hooks/use-usage-stats";
 import { useOnboarding } from "@/hooks/use-onboarding";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Settings,
+  Loader2,
   Sparkles,
   Zap,
   Sun,
@@ -52,6 +54,30 @@ export default function SettingsPage() {
     error: statsError,
   } = useUsageStats();
   const onboarding = useOnboarding();
+  const { toast } = useToast();
+  const [isRestartingOnboarding, setIsRestartingOnboarding] = useState(false);
+
+  const restartOnboarding = async () => {
+    setIsRestartingOnboarding(true);
+
+    try {
+      await onboarding.reset();
+      router.push("/onboarding");
+    } catch (error) {
+      logger.error(
+        { component: "SettingsPage" },
+        "Failed to restart onboarding",
+        error,
+      );
+      toast({
+        title: "Could not restart onboarding",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRestartingOnboarding(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -271,13 +297,18 @@ export default function SettingsPage() {
                 </div>
                 <Button
                   variant="outline"
-                  onClick={async () => {
-                    await onboarding.reset();
-                    router.push("/onboarding");
-                  }}
+                  onClick={restartOnboarding}
+                  disabled={isRestartingOnboarding}
+                  aria-busy={isRestartingOnboarding}
                 >
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Open Onboarding
+                  {isRestartingOnboarding ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Rocket className="h-4 w-4 mr-2" />
+                  )}
+                  {isRestartingOnboarding
+                    ? "Opening Onboarding..."
+                    : "Open Onboarding"}
                 </Button>
               </div>
             </CardContent>
