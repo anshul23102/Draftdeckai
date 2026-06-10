@@ -19,7 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/ItsAbir005/Draftdeckai/backend/pkg/auth"
+	"github.com/Muneerali199/Draftdeckai/backend/pkg/auth"
 )
 
 func main() {
