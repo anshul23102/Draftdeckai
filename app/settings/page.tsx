@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { useTheme } from "@/hooks/use-theme";
 import { useUsageStats } from "@/hooks/use-usage-stats";
+import { useOnboarding } from "@/hooks/use-onboarding";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Settings,
+  Loader2,
   Sparkles,
   Zap,
   Sun,
@@ -19,6 +22,7 @@ import {
   Layout,
   TrendingUp,
   Upload,
+  Rocket,
 } from "lucide-react";
 import {
   Select,
@@ -49,6 +53,31 @@ export default function SettingsPage() {
     loading: statsLoading,
     error: statsError,
   } = useUsageStats();
+  const onboarding = useOnboarding();
+  const { toast } = useToast();
+  const [isRestartingOnboarding, setIsRestartingOnboarding] = useState(false);
+
+  const restartOnboarding = async () => {
+    setIsRestartingOnboarding(true);
+
+    try {
+      await onboarding.reset();
+      router.push("/onboarding");
+    } catch (error) {
+      logger.error(
+        { component: "SettingsPage" },
+        "Failed to restart onboarding",
+        error,
+      );
+      toast({
+        title: "Could not restart onboarding",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRestartingOnboarding(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -244,6 +273,42 @@ export default function SettingsPage() {
                 >
                   <Upload className="h-4 w-4 mr-2" />
                   Import Data
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Onboarding */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Rocket className="h-5 w-5" />
+                Onboarding
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium">Restart product tour</p>
+                  <p className="text-sm text-muted-foreground">
+                    Revisit profile setup, templates, first document creation,
+                    and workspace tips.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={restartOnboarding}
+                  disabled={isRestartingOnboarding}
+                  aria-busy={isRestartingOnboarding}
+                >
+                  {isRestartingOnboarding ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Rocket className="h-4 w-4 mr-2" />
+                  )}
+                  {isRestartingOnboarding
+                    ? "Opening Onboarding..."
+                    : "Open Onboarding"}
                 </Button>
               </div>
             </CardContent>
