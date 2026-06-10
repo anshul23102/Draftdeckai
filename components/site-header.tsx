@@ -28,6 +28,7 @@ import {
   MoreHorizontal,
   Trophy,
   Download,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -767,6 +768,12 @@ const navItems = [
     label: "History",
     icon: <History className="h-4 w-4" />,
     tooltip: "View all your created documents with previews",
+  },
+  {
+    href: "/dashboard/usage",
+    label: "Usage",
+    icon: <BarChart3 className="h-4 w-4" />,
+    tooltip: "View AI credit usage, document analytics and generation history",
   },
   {
     href: "/dashboard/export",
