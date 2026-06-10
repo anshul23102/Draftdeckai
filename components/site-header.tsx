@@ -325,7 +325,11 @@ export function SiteHeader() {
 
                 <div className="mt-6 space-y-6">
                   {/* Navigation Items */}
-                  <nav className="space-y-1">
+                  <nav
+                    role="navigation"
+                    aria-label="Mobile navigation"
+                    className="space-y-1"
+                  >
                     <ul>
                       {navItems.map((item) => (
                         <li key={item.href}>
@@ -472,7 +476,11 @@ export function SiteHeader() {
             </Sheet>
 
             {/* Desktop Navigation with Tooltips */}
-            <nav className="hidden md:flex items-center gap-4 lg:gap-6 xl:gap-8">
+            <nav
+              role="navigation"
+              aria-label="Main navigation"
+              className="hidden md:flex items-center gap-4 lg:gap-6 xl:gap-8"
+            >
               {navItems.map((item) => (
                 <TooltipWithShortcut key={item.href} content={item.tooltip}>
                   <Link
@@ -507,6 +515,7 @@ export function SiteHeader() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Open more options"
                       className="h-9 w-9 text-muted-foreground hover:text-yellow-600 transition-colors"
                     >
                       <MoreHorizontal className="h-4 w-4" />
