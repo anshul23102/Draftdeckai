@@ -47,5 +47,8 @@ next-env.d.ts
 # supabase
 supabase/.temp/
 
-
 .tmp-typecheck/
+
+# next-pwa build outputs
+/public/worker-*.js
+/public/fallback-*.js
