@@ -4,11 +4,19 @@
 (function() {
     'use strict';
     
-    console.log('🚀 DraftDeckAI Smart Extension activated!');
+    const DEBUG = false;
+    const Logger = {
+        debug: (...args) => { if (DEBUG) console.debug(...args); },
+        info: (...args) => { if (DEBUG) console.info(...args); },
+        warn: (...args) => { if (DEBUG) console.warn(...args); },
+        error: (...args) => { console.error(...args); }
+    };
+    
+    Logger.info('🚀 DraftDeckAI Smart Extension activated!');
     
     // Check if extension context is valid on load
     if (!chrome.runtime || !chrome.runtime.id) {
-        console.warn('⚠️ Extension context may be invalid. Try refreshing the page.');
+        Logger.warn('⚠️ Extension context may be invalid. Try refreshing the page.');
         showReloadNotification();
         return;
     }
@@ -17,10 +25,10 @@
     const platform = detectPlatform();
     
     if (platform) {
-        console.log('✅ Detected platform:', platform);
+        Logger.debug('✅ Detected platform:', platform);
         initializeExtension(platform);
     } else {
-        console.log('ℹ️ Not on a supported coding platform');
+        Logger.debug('ℹ️ Not on a supported coding platform');
     }
     
     function initializeExtension(platform) {
@@ -35,15 +43,16 @@
     
     function detectPlatform() {
         const hostname = window.location.hostname;
+        const pathname = window.location.pathname;
         
         if (hostname.includes('leetcode.com')) return 'leetcode';
         if (hostname.includes('hackerrank.com')) return 'hackerrank';
         if (hostname.includes('codeforces.com')) return 'codeforces';
+        if (hostname.includes('linkedin.com') && pathname.startsWith('/jobs')) return 'linkedin-jobs';
         if (hostname.includes('geeksforgeeks.org')) return 'geeksforgeeks';
         if (hostname.includes('linkedin.com')) return 'linkedin';
         
         // Job portals
-        if (hostname.includes('linkedin.com/jobs')) return 'linkedin-jobs';
         if (hostname.includes('indeed.com')) return 'indeed';
         if (hostname.includes('wellfound.com') || hostname.includes('angel.co')) return 'wellfound';
         if (hostname.includes('glassdoor.com')) return 'glassdoor';
@@ -51,6 +60,66 @@
         return null;
     }
     
+    const LINKEDIN_CONSENT_KEY = 'draftdeckai_linkedin_profile_consent';
+    const AUTO_DETECT_DISABLED_KEY = 'draftdeckai_auto_detection_disabled';
+
+    function getStoredValue(key) {
+        return new Promise((resolve) => {
+            try {
+                chrome.storage.local.get([key], (result) => {
+                    if (chrome.runtime.lastError) {
+                        Logger.warn('DraftDeckAI storage read failed:', chrome.runtime.lastError);
+                        resolve(undefined);
+                        return;
+                    }
+
+                    resolve(result?.[key]);
+                });
+            } catch (error) {
+                Logger.warn('DraftDeckAI storage read failed:', error);
+                resolve(undefined);
+            }
+        });
+    }
+
+    function setStoredValue(key, value) {
+        return new Promise((resolve) => {
+            try {
+                chrome.storage.local.set({ [key]: value }, () => {
+                    if (chrome.runtime.lastError) {
+                        Logger.warn('DraftDeckAI storage write failed:', chrome.runtime.lastError);
+                    }
+
+                    resolve();
+                });
+            } catch (error) {
+                Logger.warn('DraftDeckAI storage write failed:', error);
+                resolve();
+            }
+        });
+    }
+
+    function removeStoredValue(key) {
+        return new Promise((resolve) => {
+            try {
+                chrome.storage.local.remove(key, () => {
+                    if (chrome.runtime.lastError) {
+                        Logger.warn('DraftDeckAI storage remove failed:', chrome.runtime.lastError);
+                    }
+
+                    resolve();
+                });
+            } catch (error) {
+                Logger.warn('DraftDeckAI storage remove failed:', error);
+                resolve();
+            }
+        });
+    }
+
+    async function isAutoDetectionDisabled() {
+        return getStoredValue(AUTO_DETECT_DISABLED_KEY);
+    }
+
     function injectHelper(platform) {
         // Create floating helper button
         const helperButton = document.createElement('div');
@@ -65,7 +134,11 @@
         document.body.appendChild(helperButton);
         
         // Add click handler
-        helperButton.querySelector('.draftdeckai-btn').addEventListener('click', () => {
+        helperButton.querySelector('.draftdeckai-btn').addEventListener('click', async () => {
+            if (platform === 'linkedin') {
+                const consented = await ensureLinkedInConsent();
+                if (!consented) return;
+            }
             const problemData = extractProblemData(platform);
             showHelpModal(problemData);
         });
@@ -191,6 +264,79 @@
             timestamp: new Date().toISOString()
         };
     }
+
+    async function ensureLinkedInConsent() {
+        const storedConsent = await getStoredValue(LINKEDIN_CONSENT_KEY);
+        if (storedConsent === true) return true;
+        if (storedConsent === false) return false;
+
+        return showLinkedInConsentPrompt();
+    }
+
+    function showLinkedInConsentPrompt() {
+        return new Promise((resolve) => {
+            const existing = document.getElementById('draftdeckai-linkedin-consent');
+            if (existing) existing.remove();
+
+            const prompt = document.createElement('div');
+            prompt.id = 'draftdeckai-linkedin-consent';
+            prompt.style.cssText = `
+                position: fixed;
+                right: 20px;
+                bottom: 20px;
+                width: min(360px, calc(100vw - 32px));
+                padding: 18px;
+                border-radius: 14px;
+                background: white;
+                color: #111827;
+                box-shadow: 0 18px 55px rgba(0,0,0,0.28);
+                z-index: 9999999;
+                font-family: system-ui, -apple-system, sans-serif;
+            `;
+
+            prompt.innerHTML = `
+                <div style="font-weight: 800; font-size: 1rem; margin-bottom: 8px;">
+                    Allow LinkedIn profile analysis?
+                </div>
+                <div style="font-size: 0.9rem; line-height: 1.5; color: #4b5563; margin-bottom: 14px;">
+                    DraftDeckAI will read visible profile text only after you approve. You can disable auto-detection for future pages.
+                </div>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #374151; margin-bottom: 14px;">
+                    <input id="draftdeckai-disable-auto-detect" type="checkbox" />
+                    Disable automatic detection prompts
+                </label>
+                <div style="display: flex; gap: 8px;">
+                    <button id="draftdeckai-consent-allow" style="flex: 1; padding: 10px; border: 0; border-radius: 8px; background: #0A66C2; color: white; font-weight: 700; cursor: pointer;">
+                        Allow
+                    </button>
+                    <button id="draftdeckai-consent-deny" style="flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; background: white; color: #111827; font-weight: 700; cursor: pointer;">
+                        Not now
+                    </button>
+                </div>
+            `;
+
+            document.body.appendChild(prompt);
+
+            const disableAutoDetect = prompt.querySelector('#draftdeckai-disable-auto-detect');
+            prompt.querySelector('#draftdeckai-consent-allow')?.addEventListener('click', async () => {
+                await setStoredValue(LINKEDIN_CONSENT_KEY, true);
+                await setStoredValue(AUTO_DETECT_DISABLED_KEY, !!disableAutoDetect?.checked);
+                prompt.remove();
+                resolve(true);
+            });
+
+            prompt.querySelector('#draftdeckai-consent-deny')?.addEventListener('click', async () => {
+                if (disableAutoDetect?.checked) {
+                    await setStoredValue(LINKEDIN_CONSENT_KEY, false);
+                    await setStoredValue(AUTO_DETECT_DISABLED_KEY, true);
+                } else {
+                    await removeStoredValue(LINKEDIN_CONSENT_KEY);
+                }
+                prompt.remove();
+                resolve(false);
+            });
+        });
+    }
     
     // Observe page changes for single-page applications
     function observePageChanges(platform) {
@@ -199,7 +345,7 @@
         const observer = new MutationObserver(() => {
             if (window.location.href !== lastUrl) {
                 lastUrl = window.location.href;
-                console.log('🔄 Page changed, re-initializing...');
+                Logger.debug('🔄 Page changed, re-initializing...');
                 
                 // Remove old helper if exists
                 const oldHelper = document.getElementById('draftdeckai-helper');
@@ -326,7 +472,7 @@
     async function handleAction(action, problemData) {
         const resultDiv = document.getElementById('draftdeckai-result');
         if (!resultDiv) {
-            console.error('Result div not found!');
+            Logger.error('Result div not found!');
             return;
         }
         
@@ -357,7 +503,7 @@
             
             const prompt = prompts[action];
             
-            console.log('📤 Sending message to background:', action);
+            Logger.debug('📤 Sending message to background:', action);
             
             // Double-check context before sending
             if (!isExtensionContextValid()) {
@@ -377,7 +523,7 @@
                 (response) => {
                     // Check for Chrome runtime errors
                     if (chrome.runtime.lastError) {
-                        console.error('Chrome runtime error:', chrome.runtime.lastError);
+                        Logger.error('Chrome runtime error:', chrome.runtime.lastError);
                         
                         // Check if it's a context invalidation error
                         if (chrome.runtime.lastError.message.includes('Extension context invalidated')) {
@@ -396,7 +542,7 @@
                         return;
                     }
                     
-                    console.log('📥 Received response:', response);
+                    Logger.debug('📥 Received response');
                     
                     if (!response) {
                         resultDiv.innerHTML = '<div class="draftdeckai-error">❌ No response from AI. Please check your API key in settings.</div>';
@@ -414,7 +560,7 @@
             );
             
         } catch (error) {
-            console.error('Error in handleAction:', error);
+            Logger.error('Error in handleAction:', error);
             resultDiv.innerHTML = `<div class="draftdeckai-error">❌ Failed to get AI help: ${error.message}</div>`;
         }
     }
@@ -595,7 +741,7 @@
     
     // Handle voice commands
     function handleVoiceCommand(request) {
-        console.log('Voice command received:', request.action);
+        Logger.debug('Voice command received:', request.action);
         
         switch (request.action) {
             case 'solve':
@@ -640,17 +786,46 @@
     
     // Auto-generate resume for job posting
     async function handleJobPosting() {
+        if (await isAutoDetectionDisabled()) return;
+
         const jobData = detectJobPosting();
         if (!jobData) return;
         
-        // Show floating action button
-        showJobAssistant(jobData);
+        showJobAssistantLauncher(jobData);
+    }
+
+    function showJobAssistantLauncher(jobData) {
+        const existing = document.getElementById('draftdeckai-job-assistant-launcher');
+        if (existing) existing.remove();
+
+        const launcher = document.createElement('button');
+        launcher.id = 'draftdeckai-job-assistant-launcher';
+        launcher.type = 'button';
+        launcher.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999999;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 700;
+            font-family: system-ui, -apple-system, sans-serif;
+            box-shadow: 0 10px 35px rgba(0,0,0,0.28);
+            cursor: pointer;
+        `;
+        launcher.textContent = 'Open DraftDeckAI Job Assistant';
+        launcher.addEventListener('click', () => showJobAssistant(jobData));
+        document.body.appendChild(launcher);
     }
     
     function showJobAssistant(jobData) {
         // Remove existing assistant
         const existing = document.getElementById('draftdeckai-job-assistant');
         if (existing) existing.remove();
+        document.getElementById('draftdeckai-job-assistant-launcher')?.remove();
         
         const assistant = document.createElement('div');
         assistant.id = 'draftdeckai-job-assistant';
@@ -758,7 +933,7 @@
                 }
             });
         } catch (error) {
-            console.error('Error generating resume:', error);
+            Logger.error('Error generating resume:', error);
             showInlineResult('Error', error.message);
         }
     }
@@ -842,8 +1017,7 @@
     }
     
     // Check for job postings on page load
-    if (detectPlatform()?.includes('jobs') || detectPlatform()?.includes('indeed') || 
-        detectPlatform()?.includes('wellfound') || detectPlatform()?.includes('glassdoor')) {
+    if (platform && ['linkedin-jobs', 'indeed', 'wellfound', 'glassdoor'].includes(platform)) {
         setTimeout(handleJobPosting, 2000);
     }
     
@@ -881,7 +1055,8 @@
                     ${data.spaceComplexity ? `<p><strong>💾 Space:</strong> ${data.spaceComplexity}</p>` : ''}
                 </div>`;
                 break;
-                
+
+            case 'complexity':
                 html = `<div class="draftdeckai-complexity">
                     <h4>⏱️ Complexity Analysis:</h4>
                     <p><strong>Time:</strong> ${data.timeComplexity || data.content || 'O(n)'}</p>

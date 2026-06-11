@@ -1,6 +1,14 @@
 // DraftDeckAI Smart AI Extension - Popup Script
 // Uses Gemini AI directly - No backend needed!
 
+const DEBUG = false;
+const Logger = {
+    debug: (...args) => { if (DEBUG) console.debug(...args); },
+    info: (...args) => { if (DEBUG) console.info(...args); },
+    warn: (...args) => { if (DEBUG) console.warn(...args); },
+    error: (...args) => { console.error(...args); }
+};
+
 let currentApiKey = '';
 
 // Gamification System
@@ -200,49 +208,146 @@ themeToggle.addEventListener('click', () => {
 });
 
 // Tab Management
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        const tabName = tab.dataset.tab;
-        
-        // Update active tab
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        
-        // Update active content
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.remove('active');
-        });
-        document.getElementById(`${tabName}-tab`).classList.add('active');
+const tabButtons = Array.from(document.querySelectorAll('.tab'));
+
+function activateTab(tab, shouldFocus = false) {
+    if (!tab) return;
+
+    const tabName = tab.dataset.tab;
+    const activePanel = document.getElementById(`${tabName}-tab`);
+
+    tabButtons.forEach(button => {
+        const isActive = button === tab;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-selected', String(isActive));
+        button.tabIndex = isActive ? 0 : -1;
+    });
+
+    document.querySelectorAll('.tab-content').forEach(content => {
+        const isActive = content === activePanel;
+        content.classList.toggle('active', isActive);
+        content.hidden = !isActive;
+    });
+
+    if (shouldFocus) {
+        tab.focus();
+    }
+}
+
+tabButtons.forEach((tab, index) => {
+    tab.addEventListener('click', () => activateTab(tab));
+
+    tab.addEventListener('keydown', event => {
+        const lastIndex = tabButtons.length - 1;
+        let nextIndex = index;
+
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            nextIndex = index === lastIndex ? 0 : index + 1;
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            nextIndex = index === 0 ? lastIndex : index - 1;
+        } else if (event.key === 'Home') {
+            nextIndex = 0;
+        } else if (event.key === 'End') {
+            nextIndex = lastIndex;
+        } else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            activateTab(tab);
+            return;
+        } else {
+            return;
+        }
+
+        event.preventDefault();
+        activateTab(tabButtons[nextIndex], true);
     });
 });
+
+activateTab(document.querySelector('.tab.active'));
+
+let previouslyFocusedElement = null;
+
+function getModalFocusableElements(modal) {
+    return Array.from(modal.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )).filter(element => !element.disabled && element.offsetParent !== null);
+}
+
+function openInterviewConfigModal() {
+    const modal = document.getElementById('interview-config-modal');
+    previouslyFocusedElement = document.activeElement;
+    modal.classList.remove('hidden');
+
+    const focusableElements = getModalFocusableElements(modal);
+    (focusableElements[0] || modal).focus();
+}
+
+function closeInterviewConfigModal() {
+    const modal = document.getElementById('interview-config-modal');
+    modal.classList.add('hidden');
+
+    if (previouslyFocusedElement?.focus) {
+        previouslyFocusedElement.focus();
+    }
+
+    previouslyFocusedElement = null;
+}
+
+function trapInterviewConfigFocus(event) {
+    const modal = document.getElementById('interview-config-modal');
+    if (modal.classList.contains('hidden')) return;
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        closeInterviewConfigModal();
+        return;
+    }
+
+    if (event.key !== 'Tab') return;
+
+    const focusableElements = getModalFocusableElements(modal);
+    if (!focusableElements.length) return;
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+    }
+}
+
+document.addEventListener('keydown', trapInterviewConfigFocus);
 
 // Open Settings Page
 const settingsBtn = document.getElementById('open-settings');
 if (settingsBtn) {
     settingsBtn.addEventListener('click', () => {
-        console.log('Opening settings page...');
+        Logger.debug('Opening settings page...');
         // Try to open settings page
         try {
             chrome.runtime.openOptionsPage(() => {
                 if (chrome.runtime.lastError) {
                     // Fallback: open in new tab
-                    console.log('Using fallback method...');
+                    Logger.debug('Using fallback method...');
                     chrome.tabs.create({
                         url: chrome.runtime.getURL('settings.html')
                     });
                 }
             });
         } catch (error) {
-            console.error('Error opening settings:', error);
+            Logger.error('Error opening settings:', error);
             // Direct fallback
             chrome.tabs.create({
                 url: chrome.runtime.getURL('settings.html')
             });
         }
     });
-    console.log('Settings button listener attached');
+    Logger.debug('Settings button listener attached');
 } else {
-    console.error('Settings button not found in DOM');
+    Logger.error('Settings button not found in DOM');
 }
 
 // DSA Problem Solver
@@ -268,7 +373,7 @@ document.getElementById('solve-dsa').addEventListener('click', async () => {
         incrementStat('problems-solved');
     } catch (error) {
         showNotification('Failed to solve problem. Please try again.', 'error');
-        console.error(error);
+        Logger.error(error);
     } finally {
         showLoading(false);
     }
@@ -288,7 +393,7 @@ document.getElementById('generate-questions').addEventListener('click', async ()
         incrementStat('questions-practiced', questions.length);
     } catch (error) {
         showNotification('Failed to generate questions. Please try again.', 'error');
-        console.error(error);
+        Logger.error(error);
     } finally {
         showLoading(false);
     }
@@ -305,7 +410,7 @@ document.querySelectorAll('.action-card').forEach(card => {
             displayResumeResult(action, result);
         } catch (error) {
             showNotification('Failed to process request. Please try again.', 'error');
-            console.error(error);
+            Logger.error(error);
         } finally {
             showLoading(false);
         }
@@ -331,37 +436,7 @@ document.getElementById('generate-plan').addEventListener('click', async () => {
         displayStudyPlan(plan);
     } catch (error) {
         showNotification('Failed to generate plan. Please try again.', 'error');
-        console.error(error);
-    } finally {
-        showLoading(false);
-    }
-});
-
-document.getElementById('copy-plan').addEventListener('click', () => {
-    const content = document.getElementById('study-content').textContent;
-    navigator.clipboard.writeText(content);
-    showNotification('Study plan copied!', 'success');
-});
-
-// Study Plan Generator
-document.getElementById('generate-plan').addEventListener('click', async () => {
-    const goal = document.getElementById('study-goal').value.trim();
-    const duration = document.getElementById('study-duration').value;
-    const hours = document.getElementById('study-hours').value;
-    
-    if (!goal) {
-        showNotification('Please enter your study goal', 'error');
-        return;
-    }
-    
-    showLoading(true);
-    
-    try {
-        const plan = await generateStudyPlan(goal, duration, hours);
-        displayStudyPlan(plan);
-    } catch (error) {
-        showNotification('Failed to generate plan. Please try again.', 'error');
-        console.error(error);
+        Logger.error(error);
     } finally {
         showLoading(false);
     }
@@ -462,7 +537,7 @@ async function handleResumeAction(action) {
                 }
             }
         } catch (e) {
-            console.log('Could not fetch LinkedIn data:', e);
+            Logger.warn('Could not fetch LinkedIn data:', e);
         }
     }
 
@@ -748,12 +823,12 @@ document.getElementById('start-interview-mode').addEventListener('click', () => 
     }
     
     // Show config modal
-    document.getElementById('interview-config-modal').classList.remove('hidden');
+    openInterviewConfigModal();
 });
 
 // Cancel Interview Config
 document.getElementById('cancel-interview-config').addEventListener('click', () => {
-    document.getElementById('interview-config-modal').classList.add('hidden');
+    closeInterviewConfigModal();
 });
 
 // Start Interview from Config
@@ -773,7 +848,7 @@ document.getElementById('start-interview-config').addEventListener('click', () =
     };
     
     // Hide modal
-    document.getElementById('interview-config-modal').classList.add('hidden');
+    closeInterviewConfigModal();
     
     // Start interview
     window.interviewerMode.startInterview(config);
@@ -783,10 +858,7 @@ document.getElementById('start-interview-config').addEventListener('click', () =
 // Display interview question
 function displayInterviewQuestion(question) {
     // Switch to interview tab
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelector('[data-tab="interview"]').classList.add('active');
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.getElementById('interview-tab').classList.add('active');
+    activateTab(document.querySelector('[data-tab="interview"]'));
     
     // Display question
     const resultDiv = document.getElementById('interview-result');
