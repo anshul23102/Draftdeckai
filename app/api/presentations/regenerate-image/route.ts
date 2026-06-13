@@ -22,15 +22,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
     const { prompt, size = "1024x576", imageType } = body;
 
-    if (!prompt) {
-      return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
+    const allowedSizes = ["1024x1024", "1024x768", "1024x576"] as const;
+    const allowedImageTypes = [
+      "illustration",
+      "diagram",
+      "wireframe",
+      "mockup",
+      "logo",
+      "icon",
+      "chart",
+      "photo",
+      "abstract",
+      "infographic",
+      "technology",
+    ] as const;
+
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      return NextResponse.json({ error: "Missing or invalid prompt" }, { status: 400 });
     }
 
+    if (
+      typeof size !== "string" ||
+      !allowedSizes.includes(size as (typeof allowedSizes)[number])
+    ) {
+      return NextResponse.json({ error: "Invalid size" }, { status: 400 });
+    }
+
+    if (
+      imageType !== undefined &&
+      (typeof imageType !== "string" ||
+        !allowedImageTypes.includes(imageType as (typeof allowedImageTypes)[number]))
+    ) {
+      return NextResponse.json({ error: "Invalid imageType" }, { status: 400 });
+    }
+
+    const safePrompt = prompt.trim();
+    const safeSize = size as (typeof allowedSizes)[number];
+    const safeImageType = imageType as (typeof allowedImageTypes)[number] | undefined;
+
     // Generate new image with FLUX, applying the selected style preset
-    const imageUrl = await regenerateSlideImage(prompt, size, imageType);
+    const imageUrl = await regenerateSlideImage(safePrompt, safeSize, safeImageType);
 
     return NextResponse.json({
       imageUrl,
