@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { prompt, size = "1920x1080", imageType } = body;
+    const { prompt, size = "1024x576", imageType } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
