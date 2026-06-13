@@ -1,36 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/auth-provider";
-import { useTheme } from "@/hooks/use-theme";
-import { useUsageStats } from "@/hooks/use-usage-stats";
-import { useOnboarding } from "@/hooks/use-onboarding";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Settings,
-  Loader2,
-  Sparkles,
-  Zap,
-  Sun,
-  Moon,
-  Laptop,
-  BarChart3,
-  FileText,
-  Layout,
-  TrendingUp,
-  Upload,
-  Rocket,
-} from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth-provider';
+import { useTheme } from '@/hooks/use-theme';
+import { useUsageStats } from '@/hooks/use-usage-stats';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Settings, Sparkles, Zap, Sun, Moon, Laptop, BarChart3, FileText, Layout, TrendingUp } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Bell, BellOff } from 'lucide-react';
 import { logger } from "@/lib/logger";
 
 export default function SettingsPage() {
@@ -57,8 +38,35 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [isRestartingOnboarding, setIsRestartingOnboarding] = useState(false);
 
-  const restartOnboarding = async () => {
-    setIsRestartingOnboarding(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  useEffect(() => {
+    // Check local storage for notification preference
+    const prefs = localStorage.getItem('documentGenerationNotifications');
+    if (prefs !== null) {
+      setNotificationsEnabled(prefs === 'true');
+    } else {
+      // Default to true if not set, but respect Notification permission if denied
+      setNotificationsEnabled(typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'denied');
+    }
+  }, []);
+
+  const toggleNotifications = async (enabled: boolean) => {
+    if (enabled && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        localStorage.setItem('documentGenerationNotifications', 'true');
+        setNotificationsEnabled(true);
+      } else {
+        localStorage.setItem('documentGenerationNotifications', 'false');
+        setNotificationsEnabled(false);
+      }
+    } else {
+      localStorage.setItem('documentGenerationNotifications', 'false');
+      setNotificationsEnabled(false);
+    }
+  };
+
 
     try {
       await onboarding.reset();
@@ -310,6 +318,30 @@ export default function SettingsPage() {
                     ? "Opening Onboarding..."
                     : "Open Onboarding"}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Notification Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Notifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base flex items-center gap-2">
+                    {notificationsEnabled ? <Bell className="w-4 h-4 text-blue-500" /> : <BellOff className="w-4 h-4 text-muted-foreground" />}
+                    Document Generation
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Receive browser notifications when long-running AI generation completes
+                  </p>
+                </div>
+                <Switch 
+                  checked={notificationsEnabled} 
+                  onCheckedChange={toggleNotifications} 
+                />
               </div>
             </CardContent>
           </Card>

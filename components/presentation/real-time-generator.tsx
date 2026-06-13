@@ -1,5 +1,6 @@
 'use client';
 import { logger } from "@/lib/logger";
+import { requestNotificationPermission, showDocumentNotification } from "@/lib/notifications";
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { exportPremiumPresentation } from '@/lib/premium-presentation-export';
@@ -1477,6 +1478,9 @@ export default function RealTimeGenerator() {
       setCurrentSlideText('Generating code-driven visuals...');
       setProgress(25);
 
+      // Request notification permissions for long-running task
+      requestNotificationPermission().catch(console.error);
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('Please sign in to create presentations.');
@@ -1510,11 +1514,24 @@ export default function RealTimeGenerator() {
       setSlides(normalizedSlides);
       setCurrentSlideText('Rendering visuals...');
       setProgress(100);
+
+      // Show push notification
+      showDocumentNotification("🎉 Presentation Ready!", {
+        body: `${normalizedSlides.length} slides created successfully. Click to view!`,
+        data: { url: window.location.pathname }
+      }).catch(console.error);
+
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to generate presentation';
       console.error('Presentation generation failed:', err);
       setError(message);
       alert(`Failed to generate presentation: ${message}`);
+
+      // Show failure notification
+      showDocumentNotification("❌ Generation Failed", {
+        body: "Failed to generate your presentation. Please try again.",
+        data: { url: window.location.pathname }
+      }).catch(console.error);
     } finally {
       setIsStreaming(false);
       setCurrentSlideText('');

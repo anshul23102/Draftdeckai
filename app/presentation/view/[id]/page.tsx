@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Loader2, ArrowLeft, Download } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { exportAsPDF } from "@/lib/presentation-export";
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { Loader2, ArrowLeft, Download } from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { exportAsPDF } from '@/lib/presentation-export';
 
 interface Slide {
   slideNumber: number;
