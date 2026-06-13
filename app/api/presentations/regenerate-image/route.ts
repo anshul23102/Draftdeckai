@@ -22,7 +22,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = (await request.json()) as Record<string, unknown>;
+    let body: Record<string, unknown>;
+try {
+  body = (await request.json()) as Record<string, unknown>;
+} catch {
+  return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+}
     const { prompt, size = "1024x576", imageType } = body;
 
     const allowedSizes = ["1024x1024", "1024x768", "1024x576"] as const;
