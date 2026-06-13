@@ -226,6 +226,69 @@ describe("Stripe webhook route", () => {
     ).not.toHaveBeenCalled();
   });
 
+  it("returns 500 when the webhook idempotency lookup fails", async () => {
+    const { route, supabase } = await loadRoute();
+    constructEvent.mockReturnValue(
+      eventFixture("checkout.session.completed", {
+        metadata: { userId: "user-1" },
+        customer: "cus_123",
+        subscription: "sub_123",
+      }),
+    );
+    supabase.tableBuilders
+      .get("stripe_webhook_events")!
+      .maybeSingle.mockResolvedValue({
+        data: null,
+        error: new Error("lookup failed"),
+      });
+
+    const response = await route.POST(makeRequest());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Webhook processing failed",
+    });
+    expect(retrieveSubscription).not.toHaveBeenCalled();
+    expect(
+      supabase.tableBuilders.get("stripe_webhook_events")!.insert,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("upserts subscription details for customer.subscription.created", async () => {
+    const { route, supabase } = await loadRoute();
+    constructEvent.mockReturnValue(
+      eventFixture("customer.subscription.created", subscriptionFixture()),
+    );
+    supabase.tableBuilders
+      .get("subscription_plans")!
+      .single.mockResolvedValue({ data: { id: "plan_123" }, error: null });
+    supabase.tableBuilders
+      .get("user_subscriptions")!
+      .upsert.mockResolvedValue({ error: null });
+
+    const response = await route.POST(makeRequest());
+
+    expect(response.status).toBe(200);
+    expect(
+      supabase.tableBuilders.get("user_subscriptions")!.upsert,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        plan_id: "plan_123",
+        stripe_subscription_id: "sub_123",
+        status: "active",
+      }),
+    );
+    expect(
+      supabase.tableBuilders.get("stripe_webhook_events")!.insert,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stripe_event_id: "evt_customer.subscription.created",
+        event_type: "customer.subscription.created",
+      }),
+    );
+  });
+
   it("upserts current subscription details for customer.subscription.updated", async () => {
     const { route, supabase } = await loadRoute();
     constructEvent.mockReturnValue(
