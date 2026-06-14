@@ -12,7 +12,6 @@ export function SimpleThemeToggle() {
         className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center"
         aria-hidden="true"
         tabIndex={-1}
-        aria-label="Theme toggle loading"
       >
         <Sun className="h-5 w-5" />
       </button>

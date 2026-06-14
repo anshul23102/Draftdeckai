@@ -1128,6 +1128,7 @@ export function DocumentGeneratorEnhanced({ onDocumentCreated }: DocumentGenerat
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
                   setView('dashboard');
                 }
               }}

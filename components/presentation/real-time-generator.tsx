@@ -1729,6 +1729,7 @@ export default function RealTimeGenerator() {
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
                   if (!isStreaming) setView('dashboard');
                 }
               }}
