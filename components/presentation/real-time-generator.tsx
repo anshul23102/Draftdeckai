@@ -1722,7 +1722,19 @@ export default function RealTimeGenerator() {
       <div className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-b border-border z-50 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => !isStreaming && setView('dashboard')}>
+            <div 
+              className="flex items-center gap-3 cursor-pointer group" 
+              onClick={() => !isStreaming && setView('dashboard')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  if (!isStreaming) setView('dashboard');
+                }
+              }}
+              aria-label="Go to dashboard"
+            >
               <div className="w-10 h-10 bolt-gradient rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
