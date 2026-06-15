@@ -1259,7 +1259,7 @@ export function DiagramGenerator({ sessionId }: DiagramGeneratorProps) {
               <div
                 ref={diagramRef}
                 aria-live="polite"
-                className=" glass-effect border-2 border-yellow-400/30 rounded-xl overflow-hidden bg-gradient-to-br from-background via-background to-background from-white via-blue-50/30 t0-white relative min-h-[300px] sm:min-h-[450px] lg:min-h-[550px] shadow-lg hover:shadow-xl transition-shadow duration-300"
+                className="glass-effect border-2 border-yellow-400/30 rounded-xl overflow-hidden bg-gradient-to-br from-background via-background to-background from-white via-blue-50/30 to-white relative min-h-[300px] sm:min-h-[450px] lg:min-h-[550px] shadow-lg hover:shadow-xl transition-shadow duration-300"
               >
                 <div className="absolute inset-0 shimmer opacity-20"></div>
                 <div className="absolute top-0 right-0 w-40 h-40 bg-yellow-400/10 rounded-full blur-3xl -z-10"></div>
