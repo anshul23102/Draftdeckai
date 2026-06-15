@@ -23,7 +23,7 @@ export async function loadDesignWithLayers(designId, DesignModel, LayerProperty)
   if (!design) throw new Error(`Design not found: ${designId}`);
 
   const layers = design.layers || [];
-  if (layers.length === 0) return { ...design.toObject(), layerProperties: [] };
+  if (layers.length === 0) return { ...design.toObject(), layers: [] };
 
   const propertiesMap = await batchFetchLayerProperties(layers, LayerProperty);
 
