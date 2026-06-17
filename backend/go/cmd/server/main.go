@@ -16,12 +16,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Muneerali199/Draftdeckai/backend/go/internal/database"
 	"github.com/Muneerali199/Draftdeckai/backend/pkg/auth"
 )
 
 // requiredEnvVars lists environment variables that must be set for the server to start.
 var requiredEnvVars = []string{
 	"SUPABASE_JWT_SECRET",
+	"DATABASE_URL",
 }
 
 // validateEnv checks that all required environment variables are set.
@@ -43,6 +45,22 @@ func main() {
 	if err := validateEnv(); err != nil {
 		log.Fatalf("Startup validation failed: %v", err)
 	}
+
+	// Initialize Database Connection Pool
+	ctx := context.Background()
+	dbCfg, err := database.LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load database config: %v", err)
+	}
+
+	slog.Info("initializing database pool...")
+	pool, err := database.NewPool(ctx, dbCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize database pool: %v", err)
+	}
+	db := database.NewDatabase(pool)
+	slog.Info("database connection pool initialized successfully")
+
 	r := chi.NewRouter()
 
 	r.Use(chiMiddleware.RequestID)
@@ -118,8 +136,11 @@ func main() {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("server forced to shutdown", "error", err)
+		db.Close()
 		os.Exit(1)
 	}
 
+	db.Close()
+	slog.Info("database connection pool closed")
 	slog.Info("server stopped gracefully")
 }
