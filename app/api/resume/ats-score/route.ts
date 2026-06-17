@@ -1,6 +1,9 @@
+import { logger } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { ACTION_COSTS, TIER_LIMITS, getCreditsResetDate, shouldResetCredits, calculateRemainingCredits, hasUnlimitedDeveloperCredits } from '@/lib/credits-service';
+import { ACTION_COSTS, TIER_LIMITS, getCreditsResetDate, shouldResetCredits, calculateRemainingCredits } from '@/lib/credits-service';
+import { hasUnlimitedDeveloperCredits, logDeveloperCreditBypass } from '@/lib/developer-credit-bypass';
+import { reserveCredits, refundCredits, creditReservationConflictResponse } from '@/lib/credit-operations';
 
 // Service role client for credit operations
 const supabaseAdmin = createClient(
@@ -79,7 +82,7 @@ export async function POST(req: Request) {
         .single();
       
       if (insertError) {
-        console.error('Failed to create credits record:', insertError);
+        logger.error({ route: 'app/api/resume/ats-score/route.ts' }, 'Failed to create credits record:', insertError);
         return NextResponse.json(
           { error: 'Failed to initialize credits' },
           { status: 500 }
@@ -113,7 +116,7 @@ export async function POST(req: Request) {
     
     if (!hasUnlimitedCredits && creditsRemaining < creditCost) {
       return NextResponse.json(
-        { 
+        {
           error: 'Not enough credits',
           message: `You need ${creditCost} credits to calculate ATS score. You have ${creditsRemaining} credits remaining.`,
           needsUpgrade: true,
@@ -124,38 +127,60 @@ export async function POST(req: Request) {
       );
     }
 
-    // Calculate ATS score
-    const atsAnalysis = await calculateATSScore(resumeData, jobDescription);
-
-    // ✅ DEDUCT CREDITS after successful analysis
+    // Atomically reserve credits BEFORE generation to prevent the
+    // TOCTOU race documented in issue #477.
     if (!hasUnlimitedCredits) {
-      const { error: updateError } = await supabaseAdmin
-        .from('user_credits')
-        .update({ 
-          credits_used: userCredits.credits_used + creditCost,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
+      const reserved = await reserveCredits(
+        supabaseAdmin,
+        user.id,
+        userCredits.credits_used,
+        creditCost
+      );
+      if (!reserved) {
+        return NextResponse.json(
+          creditReservationConflictResponse(creditCost, userCredits.tier),
+          { status: 402 }
+        );
+      }
+      userCredits = reserved;
+    }
 
-      if (updateError) {
-        console.error('Failed to deduct credits:', updateError);
+    if (hasUnlimitedCredits) {
+      logDeveloperCreditBypass({ userId: user.id, email: user.email, action: 'ats_check' });
+    }
+
+    // Calculate ATS score
+    let atsAnalysis;
+    try {
+      atsAnalysis = await calculateATSScore(resumeData, jobDescription);
+    } catch (err) {
+      if (!hasUnlimitedCredits) {
+        await refundCredits(supabaseAdmin, user.id, creditCost);
+      }
+      throw err;
+    }
+
+    // Credits were already reserved atomically. Log usage after success.
+    if (!hasUnlimitedCredits) {
+      const { error: logError } = await supabaseAdmin
+        .from('credit_usage_log')
+        .insert({
+          user_id: user.id,
+          action: 'ats_check',
+          credits_used: creditCost,
+          metadata: { has_job_description: !!jobDescription }
+        });
+
+      if (logError) {
+        logger.error({ route: 'app/api/resume/ats-score/route.ts' }, 'Failed to log credit usage:', logError);
       } else {
-        await supabaseAdmin
-          .from('credit_usage_log')
-          .insert({
-            user_id: user.id,
-            action: 'ats_check',
-            credits_used: creditCost,
-            metadata: { has_job_description: !!jobDescription }
-          });
-        
-        console.log(`💳 Deducted ${creditCost} credits for ATS score calculation`);
+        // console.log(`💳 Deducted ${creditCost} credits for ATS score calculation`);
       }
     }
 
     return NextResponse.json({ atsAnalysis });
   } catch (error: any) {
-    console.error("ATS score calculation error:", error);
+    logger.error({ route: 'app/api/resume/ats-score/route.ts' }, "ATS score calculation error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to calculate ATS score" },
       { status: 500 }

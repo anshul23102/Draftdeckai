@@ -7,7 +7,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ReactNode, useState } from 'react';
 import { TemplateProvider } from '@/providers/template-provider';
 import { Toaster } from '@/components/ui/toaster';
-import { ToastProvider } from '@/components/ui/use-toast';
 import { AuthProvider } from '@/components/auth-provider';
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -27,21 +26,22 @@ export function Providers({ children }: { children: ReactNode }) {
       <AuthProvider>
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
-          enableSystem={true}
-          disableTransitionOnChange={false}
+          defaultTheme="system"
+          enableSystem
+          storageKey="theme"
+          disableTransitionOnChange
         >
           <TooltipProvider>
-            <ToastProvider>
-              <TemplateProvider>
-                {children}
-                <Toaster />
-              </TemplateProvider>
-            </ToastProvider>
+            <TemplateProvider>
+              {children}
+              <Toaster />
+            </TemplateProvider>
           </TooltipProvider>
         </ThemeProvider>
       </AuthProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
+      {process.env.NODE_ENV === 'development' && (
+        <ReactQueryDevtools initialIsOpen={false} />
+      )}
     </QueryClientProvider>
   );
 }

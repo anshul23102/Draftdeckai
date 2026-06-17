@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -8,7 +9,10 @@ import {
 } from '@/lib/mistral';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
-import { ACTION_COSTS, TIER_LIMITS, getCreditsResetDate, shouldResetCredits, calculateRemainingCredits, hasUnlimitedDeveloperCredits } from '@/lib/credits-service';
+import { ACTION_COSTS, calculateRemainingCredits } from '@/lib/credits-service';
+import { hasUnlimitedDeveloperCredits, logDeveloperCreditBypass } from '@/lib/developer-credit-bypass';
+import { reserveCredits, refundCredits, creditReservationConflictResponse } from '@/lib/credit-operations';
+import { getCachedUserCredits, invalidateUserCredits } from '@/lib/cached-queries';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -145,7 +149,7 @@ async function generateWithNebius(
   pageCount: number,
   model: NebiusOutlineModel = 'meta-llama/Meta-Llama-3.1-70B-Instruct'
 ) {
-  console.log('🔄 Using Nebius/Qwen as fallback...');
+  // console.log('🔄 Using Nebius/Qwen as fallback...');
   
   const completion = await nebiusClient.chat.completions.create({
     model,
@@ -201,7 +205,7 @@ Make content professional, engaging, and visually focused.`
       
       return parsedSlides;
     } catch (e) {
-      console.error('Failed to parse Nebius response:', e);
+      logger.error({ route: 'app/api/generate/presentation-outline/route.ts' }, 'Failed to parse Nebius response:', e);
     }
   }
   
@@ -269,67 +273,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get or create user credits
-    let { data: userCredits } = await supabaseAdmin
-      .from('user_credits')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    // If no credits record exists, create one
+    // Get or create user credits (cached, 15 s TTL)
+    const userCredits = await getCachedUserCredits(supabaseAdmin, user.id);
     if (!userCredits) {
-      const { data: newCredits, error: insertError } = await supabaseAdmin
-        .from('user_credits')
-        .insert({
-          user_id: user.id,
-          tier: 'free',
-          credits_total: TIER_LIMITS.free,
-          credits_used: 0,
-          credits_reset_at: getCreditsResetDate()
-        })
-        .select()
-        .single();
-      
-      if (insertError) {
-        console.error('Failed to create credits record:', insertError);
-        return NextResponse.json(
-          { error: 'Failed to initialize credits' },
-          { status: 500 }
-        );
-      }
-      userCredits = newCredits;
-    }
-
-    // Check if credits need reset
-    if (userCredits && shouldResetCredits(userCredits.credits_reset_at)) {
-      const resetAt = getCreditsResetDate();
-      const { data: updatedCredits, error: updateError } = await supabaseAdmin
-        .from('user_credits')
-        .update({
-          credits_used: 0,
-          credits_reset_at: resetAt,
-        })
-        .eq('user_id', user.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('Failed to reset credits in database, applying local reset instead:', updateError);
-        userCredits = {
-          ...userCredits,
-          credits_used: 0,
-          credits_reset_at: resetAt,
-        };
-      } else if (updatedCredits) {
-        userCredits = updatedCredits;
-      } else {
-        console.error('Credits reset did not return an updated record, applying local reset instead');
-        userCredits = {
-          ...userCredits,
-          credits_used: 0,
-          credits_reset_at: resetAt,
-        };
-      }
+      return NextResponse.json(
+        { error: 'Failed to initialize credits' },
+        { status: 500 }
+      );
     }
 
     // Check if user has enough credits - use validated page count for calculation
@@ -343,7 +293,7 @@ export async function POST(request: Request) {
       const creditWord = estimatedCreditCost === 1 ? 'credit' : 'credits';
       const slideWord = validatedPageCount === 1 ? 'slide' : 'slides';
       return NextResponse.json(
-        { 
+        {
           error: 'Not enough credits',
           message: `You need ${estimatedCreditCost} ${creditWord} to generate a ${validatedPageCount}-${slideWord} presentation. You have ${creditsRemaining} ${creditsRemaining === 1 ? 'credit' : 'credits'} remaining.`,
           needsUpgrade: true,
@@ -355,43 +305,82 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log('📝 Step 1: Generating slide text content...');
-    
-    // Step 1: Generate text content - Use Mistral first, then Nebius fallback
-    let outlines;
-    const nebiusFirst = selectedModel !== 'meta-llama/Meta-Llama-3.1-70B-Instruct';
-    if (nebiusFirst) {
-      console.log(`Using Nebius model for outline generation: ${selectedModel}`);
-      outlines = await generateWithNebius(promptWithSettings, validatedPageCount, selectedModel);
-    } else {
-      try {
-        console.log('Using Mistral Large for text generation');
-        outlines = await generatePresentationText(prompt, validatedPageCount, {
-          language: settings?.language,
-          audience: settings?.audience,
-          tone: settings?.tone,
-          textDensity: settings?.textDensity,
-          purpose: settings?.purpose,
-        });
-
-        if (!outlines || outlines.length === 0) {
-          throw new Error('Mistral generated no content');
-        }
-
-        console.log('Generated with Mistral');
-      } catch (mistralError: any) {
-        console.error('Mistral failed:', mistralError.message);
-        console.log('Falling back to Nebius...');
-        outlines = await generateWithNebius(promptWithSettings, validatedPageCount, selectedModel);
+    // Atomically reserve the estimated credit cost BEFORE generation to
+    // prevent the TOCTOU race documented in issue #477. We refund any
+    // over-reservation later if the model returns fewer slides.
+    if (!hasUnlimitedCredits) {
+      const reserved = await reserveCredits(
+        supabaseAdmin,
+        user.id,
+        userCredits.credits_used,
+        estimatedCreditCost
+      );
+      invalidateUserCredits(user.id);
+      if (!reserved) {
+        return NextResponse.json(
+          creditReservationConflictResponse(estimatedCreditCost, userCredits.tier),
+          { status: 402 }
+        );
       }
     }
-    
-    console.log(`✅ Generated ${outlines.length} slides`);
 
-    // If outlineOnly is requested, return here without generating images/charts
+    if (hasUnlimitedCredits) {
+      logDeveloperCreditBypass({ userId: user.id, email: user.email, action: 'presentation' });
+    }
+
+    // console.log('📝 Step 1: Generating slide text content...');
+
+    // Step 1: Generate text content - Use Mistral first, then Nebius fallback
+    let outlines;
+    try {
+      const nebiusFirst = selectedModel !== 'meta-llama/Meta-Llama-3.1-70B-Instruct';
+      if (nebiusFirst) {
+        // console.log(`Using Nebius model for outline generation: ${selectedModel}`);
+        outlines = await generateWithNebius(promptWithSettings, validatedPageCount, selectedModel);
+      } else {
+        try {
+          // console.log('Using Mistral Large for text generation');
+          outlines = await generatePresentationText(prompt, validatedPageCount, {
+            language: settings?.language,
+            audience: settings?.audience,
+            tone: settings?.tone,
+            textDensity: settings?.textDensity,
+            purpose: settings?.purpose,
+          });
+
+          if (!outlines || outlines.length === 0) {
+            throw new Error('Mistral generated no content');
+          }
+
+          // console.log('Generated with Mistral');
+        } catch (mistralError: any) {
+          logger.error({ route: 'app/api/generate/presentation-outline/route.ts' }, 'Mistral failed:', mistralError.message);
+          // console.log('Falling back to Nebius...');
+          outlines = await generateWithNebius(promptWithSettings, validatedPageCount, selectedModel);
+        }
+      }
+    } catch (err) {
+      if (!hasUnlimitedCredits) {
+        await refundCredits(supabaseAdmin, user.id, estimatedCreditCost);
+        invalidateUserCredits(user.id);
+      }
+      throw err;
+    }
+
+    // console.log(`✅ Generated ${outlines.length} slides`);
+
+    // If outlineOnly is requested, reconcile credits then return early.
     if (outlineOnly) {
-      console.log('🚀 Returning outline only as requested');
-      return NextResponse.json({ 
+      // console.log('🚀 Returning outline only as requested');
+      if (!hasUnlimitedCredits) {
+        const actualCost = outlines.length * creditsPerSlide;
+        const overReserved = estimatedCreditCost - actualCost;
+        if (overReserved > 0) {
+          await refundCredits(supabaseAdmin, user.id, overReserved);
+        }
+        invalidateUserCredits(user.id);
+      }
+      return NextResponse.json({
         outlines: outlines,
         stats: {
           totalSlides: outlines.length,
@@ -401,7 +390,7 @@ export async function POST(request: Request) {
       });
     }
 
-    console.log('🎨 Step 2: Generating images with FLUX AI...');
+    // console.log('🎨 Step 2: Generating images with FLUX AI...');
     
     // Step 2: Generate images with FLUX (skip Mistral)
     const { generatePresentationImages } = await import('@/lib/flux-image-generator');
@@ -431,20 +420,20 @@ export async function POST(request: Request) {
     // Generate all images with FLUX (using 512x512 - smaller, faster)
     const imageUrls = await generatePresentationImages(imagePrompts, "512x512");
     
-    console.log(`✅ Generated ${imageUrls.length} images with FLUX`);
-    console.log('📊 Step 3: Generating chart data with Mistral AI...');
+    // console.log(`✅ Generated ${imageUrls.length} images with FLUX`);
+    // console.log('📊 Step 3: Generating chart data with Mistral AI...');
     
     // Step 3: Generate chart data with Mistral AI (keep this for now)
     let chartDataList: any[] = [];
     try {
       chartDataList = await generateChartData(outlines, prompt);
-      console.log(`✅ Generated ${chartDataList.length} charts`);
+      // console.log(`✅ Generated ${chartDataList.length} charts`);
     } catch (error) {
-      console.error('Error generating charts:', error);
-      console.log('⚠️ Skipping chart generation due to rate limit');
+      logger.error({ route: 'app/api/generate/presentation-outline/route.ts' }, 'Error generating charts:', error);
+      // console.log('⚠️ Skipping chart generation due to rate limit');
     }
     
-    console.log('✨ Step 4: Combining slides with images and charts...');
+    // console.log('✨ Step 4: Combining slides with images and charts...');
     
     // Step 4: Combine everything
     const enhancedOutlines = outlines.map((outline: any, index: number) => {
@@ -461,46 +450,33 @@ export async function POST(request: Request) {
       };
     });
     
-    console.log('✨ Step 5: Presentation enhancement complete!');
-    console.log(`📊 Final stats: ${enhancedOutlines.length} slides, ${imageUrls.length} FLUX images, ${chartDataList.length} charts`);
+    // console.log('✨ Step 5: Presentation enhancement complete!');
+    // console.log(`📊 Final stats: ${enhancedOutlines.length} slides, ${imageUrls.length} FLUX images, ${chartDataList.length} charts`);
     
-    // ✅ DEDUCT CREDITS based on actual slides generated
+    // Credits were reserved at estimatedCreditCost. If the model returned
+    // fewer slides, refund the difference now and log the actual cost.
     const actualCreditCost = enhancedOutlines.length * creditsPerSlide;
+    let creditsUsedAfter = userCredits.credits_used;
     if (!hasUnlimitedCredits) {
-      const { error: updateError } = await supabaseAdmin
-        .from('user_credits')
-        .update({ 
-          credits_used: userCredits.credits_used + actualCreditCost,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        console.error('Failed to deduct credits:', updateError);
-        // Don't fail the request, just log the error
-      } else {
-        // Log the usage
-        const { error: logError } = await supabaseAdmin
-          .from('credit_usage_log')
-          .insert({
-            user_id: user.id,
-            action: 'presentation',
-            credits_used: actualCreditCost,
-            metadata: { 
-              pageCount: enhancedOutlines.length,
-              prompt_length: prompt.length 
-            }
-          });
-        
-        if (logError) {
-          console.error('Failed to log credit usage:', logError);
+      const overReserved = estimatedCreditCost - actualCreditCost;
+      if (overReserved > 0) {
+        const refunded = await refundCredits(supabaseAdmin, user.id, overReserved);
+        if (!refunded) {
+          logger.error({ route: 'app/api/generate/presentation-outline/route.ts' }, `Failed to refund ${overReserved} over-reserved credits for user ${user.id}`);
+        } else {
+          creditsUsedAfter -= overReserved;
         }
-        
-        console.log(`💳 Deducted ${actualCreditCost} credits for ${enhancedOutlines.length}-slide presentation`);
+        invalidateUserCredits(user.id);
       }
+
+      // Fire-and-forget: log write does not block the response
+      supabaseAdmin
+        .from('credit_usage_log')
+        .insert({ user_id: user.id, action_type: 'presentation', credits_used: actualCreditCost, metadata: { pageCount: enhancedOutlines.length, prompt_length: prompt.length } })
+        .then(({ error }) => { if (error) console.error('Failed to log credit usage:', error); });
     }
-    
-    return NextResponse.json({ 
+
+    return NextResponse.json({
       outlines: enhancedOutlines,
       stats: {
         totalSlides: enhancedOutlines.length,
@@ -513,12 +489,12 @@ export async function POST(request: Request) {
           ? Number.MAX_SAFE_INTEGER
           : calculateRemainingCredits(
             userCredits.credits_total,
-            userCredits.credits_used + actualCreditCost
+            creditsUsedAfter
           )
       }
     });
   } catch (error) {
-    console.error('Error generating presentation outline:', error);
+    logger.error({ route: 'app/api/generate/presentation-outline/route.ts' }, 'Error generating presentation outline:', error);
     return NextResponse.json(
       { error: 'Failed to generate presentation outline', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

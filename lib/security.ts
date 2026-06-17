@@ -40,7 +40,7 @@ export const SECURITY_CONFIG = {
 };
 
 // Security headers for different environments
-export const getSecurityHeaders = (isDevelopment: boolean = false) => {
+export const getSecurityHeaders = (isDevelopment: boolean = false): Record<string, string> => {
   const baseHeaders = {
     'X-Frame-Options': 'DENY',
     'X-Content-Type-Options': 'nosniff',
@@ -64,7 +64,7 @@ export const getSecurityHeaders = (isDevelopment: boolean = false) => {
     // If this directive is ever removed, PDF generation will fail with CSP violations.
     "connect-src 'self' data: https://*.supabase.co https://*.nebius.cloud https://api.stripe.com https://generativelanguage.googleapis.com https://api.mistral.ai https://api.tokenfactory.nebius.com https://latexonline.cc https://latex.ytotech.com https://cdn.jsdelivr.net",
     "frame-src 'self' blob: https://js.stripe.com",
-    "object-src 'self' blob:",
+    "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
@@ -79,7 +79,7 @@ export const getSecurityHeaders = (isDevelopment: boolean = false) => {
   if (!isDevelopment) {
     return {
       ...headers,
-      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
     };
   }
 
@@ -113,22 +113,76 @@ export function validateEnvironmentVariables() {
   }
 }
 
+import { logger } from './logger';
+
 // Log security events
 export function logSecurityEvent(event: string, details: any, ip?: string) {
-  const timestamp = new Date().toISOString();
   const logEntry = {
-    timestamp,
     event,
     ip: ip || 'unknown',
     details,
   };
 
-  // In production, send to monitoring service
-  if (process.env.NODE_ENV === 'production') {
-    console.warn('SECURITY_EVENT:', JSON.stringify(logEntry));
-  } else {
-    console.log('Security Event:', logEntry);
+  // The logger handles environment checks and structured JSON output
+  logger.warn(null, 'SECURITY_EVENT', logEntry);
+}
+
+// Rate limiting store: shared across the instance
+const rateLimitStore = new Map<string, { count: number; reset: number }>();
+const RATE_LIMIT_MAX_ENTRIES = 10_000;
+
+function pruneExpired(now: number) {
+  for (const [key, value] of rateLimitStore) {
+    if (now > value.reset) rateLimitStore.delete(key);
   }
+}
+
+export interface RateLimitConfig {
+  requests: number;
+  windowMs: number;
+}
+
+/**
+ * Reusable rate limiting utility.
+ * Supports configurable request caps and time windows.
+ */
+export function checkRateLimit(
+  identifier: string,
+  config: RateLimitConfig
+): { allowed: boolean; remaining: number; reset: number; retryAfter: number } {
+  const now = Date.now();
+  if (rateLimitStore.size > RATE_LIMIT_MAX_ENTRIES) pruneExpired(now);
+  
+  let data = rateLimitStore.get(identifier);
+
+  if (!data || now > data.reset) {
+    data = { count: 1, reset: now + config.windowMs };
+    rateLimitStore.set(identifier, data);
+    return { 
+      allowed: true, 
+      remaining: config.requests - 1, 
+      reset: data.reset,
+      retryAfter: 0 
+    };
+  }
+
+  if (data.count >= config.requests) {
+    return { 
+      allowed: false, 
+      remaining: 0, 
+      reset: data.reset,
+      retryAfter: Math.ceil((data.reset - now) / 1000)
+    };
+  }
+
+  data.count++;
+  rateLimitStore.set(identifier, data);
+  return { 
+    allowed: true, 
+    remaining: config.requests - data.count, 
+    reset: data.reset,
+    retryAfter: 0
+  };
 }
 
 // Check if request is from allowed origin
@@ -138,10 +192,10 @@ export function isAllowedOrigin(origin: string | null, host: string): boolean {
   const allowedOrigins = [
     `https://${host}`,
     'https://draftdeckai.com',
-    'https://your-vercel-url.vercel.app',
+    ...(process.env.NEXT_PUBLIC_VERCEL_URL ? [`https://${process.env.NEXT_PUBLIC_VERCEL_URL.replace(/^https?:\/\//, '')}`] : []),
   ];
 
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env['NODE_ENV'] === 'development') {
     allowedOrigins.push(
       'http://localhost:3000',
       'http://127.0.0.1:3000',

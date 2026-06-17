@@ -1,6 +1,10 @@
+import { logger } from '@/lib/logger';
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { ACTION_COSTS, TIER_LIMITS, getCreditsResetDate, shouldResetCredits, calculateRemainingCredits, hasUnlimitedDeveloperCredits } from '@/lib/credits-service';
+import { ACTION_COSTS, TIER_LIMITS, getCreditsResetDate, shouldResetCredits, calculateRemainingCredits } from '@/lib/credits-service';
+import { hasUnlimitedDeveloperCredits, logDeveloperCreditBypass } from '@/lib/developer-credit-bypass';
+import { reserveCredits, refundCredits, creditReservationConflictResponse } from '@/lib/credit-operations';
 
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 
@@ -14,7 +18,7 @@ export async function POST(request: Request) {
   try {
     // ✅ CHECK API KEY FIRST - fail fast if service is misconfigured
     if (!MISTRAL_API_KEY) {
-      console.error('MISTRAL_API_KEY is not configured');
+      logger.error({ route: 'app/api/analyze-ats/route.ts' }, 'MISTRAL_API_KEY is not configured');
       return NextResponse.json(
         { error: 'AI service is not properly configured. Please contact support.' },
         { status: 503 }
@@ -76,7 +80,7 @@ export async function POST(request: Request) {
         .single();
       
       if (insertError) {
-        console.error('Failed to create credits record:', insertError);
+        logger.error({ route: 'app/api/analyze-ats/route.ts' }, 'Failed to create credits record:', insertError);
         return NextResponse.json(
           { error: 'Failed to initialize credits' },
           { status: 500 }
@@ -110,7 +114,7 @@ export async function POST(request: Request) {
     
     if (!hasUnlimitedCredits && creditsRemaining < creditCost) {
       return NextResponse.json(
-        { 
+        {
           error: 'Not enough credits',
           message: `You need ${creditCost} credits to analyze a resume. You have ${creditsRemaining} credits remaining.`,
           needsUpgrade: true,
@@ -120,6 +124,34 @@ export async function POST(request: Request) {
         { status: 402 }
       );
     }
+
+    // Atomically reserve credits BEFORE generation to prevent the
+    // TOCTOU race documented in issue #477.
+    if (!hasUnlimitedCredits) {
+      const reserved = await reserveCredits(
+        supabaseAdmin,
+        user.id,
+        userCredits.credits_used,
+        creditCost
+      );
+      if (!reserved) {
+        return NextResponse.json(
+          creditReservationConflictResponse(creditCost, userCredits.tier),
+          { status: 402 }
+        );
+      }
+      userCredits = reserved;
+    }
+
+    if (hasUnlimitedCredits) {
+      logDeveloperCreditBypass({ userId: user.id, email: user.email, action: 'ats_check' });
+    }
+
+    // Single refund-on-exit guard for everything after the reservation:
+    // any unsuccessful return path (HTTP failure, missing content, thrown
+    // exception) refunds via finally; success flips the flag off.
+    let refundOnExit = !hasUnlimitedCredits;
+    try {
 
     const systemPrompt = `You are an expert ATS (Applicant Tracking System) analyzer. Analyze the provided resume text and return a detailed ATS compatibility score with actionable suggestions.
 
@@ -196,7 +228,7 @@ ${resumeText}`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Mistral API error:', errorText);
+      logger.error({ route: 'app/api/analyze-ats/route.ts' }, 'Mistral API error:', errorText);
       return NextResponse.json(
         { error: 'Failed to analyze resume. Please try again.' },
         { status: 500 }
@@ -224,7 +256,7 @@ ${resumeText}`;
         throw new Error('No JSON found in response');
       }
     } catch (parseError) {
-      console.error('Failed to parse analysis result:', content);
+      logger.error({ route: 'app/api/analyze-ats/route.ts' }, 'Failed to parse analysis result:', content);
       // Return a default analysis if parsing fails
       analysisResult = {
         score: 65,
@@ -250,39 +282,47 @@ ${resumeText}`;
       };
     }
 
-    // ✅ DEDUCT CREDITS after successful analysis
-    if (!hasUnlimitedCredits) {
-      const { error: updateError } = await supabaseAdmin
-        .from('user_credits')
-        .update({ 
-          credits_used: userCredits.credits_used + creditCost,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
+    // The user gets a result (either the parsed analysis or the fallback
+    // default). Mark the reservation as kept BEFORE returning so the
+    // finally guard doesn't refund a successful generation.
+    refundOnExit = false;
 
-      if (updateError) {
-        console.error('Failed to deduct credits:', updateError);
+    // Log the usage now that the analysis succeeded. Credits were already
+    // reserved atomically above.
+    if (!hasUnlimitedCredits) {
+      const { error: logError } = await supabaseAdmin
+        .from('credit_usage_log')
+        .insert({
+          user_id: user.id,
+          action: 'ats_check',
+          credits_used: creditCost,
+          metadata: { has_job_description: !!jobDescription, resume_length: resumeText.length }
+        });
+
+      if (logError) {
+        logger.error({ route: 'app/api/analyze-ats/route.ts' }, 'Failed to log credit usage:', logError);
       } else {
-        await supabaseAdmin
-          .from('credit_usage_log')
-          .insert({
-            user_id: user.id,
-            action: 'ats_check',
-            credits_used: creditCost,
-            metadata: { has_job_description: !!jobDescription, resume_length: resumeText.length }
-          });
-        
-        console.log(`💳 Deducted ${creditCost} credits for ATS analysis`);
+        // console.log(`💳 Deducted ${creditCost} credits for ATS analysis`);
       }
     }
 
     return NextResponse.json(analysisResult);
 
+    } finally {
+      if (refundOnExit) {
+        const refunded = await refundCredits(supabaseAdmin, user.id, creditCost);
+        if (!refunded) {
+          logger.error({ route: 'app/api/analyze-ats/route.ts' }, `Failed to refund ${creditCost} credits after ATS analysis failure for user ${user.id}`);
+        }
+      }
+    }
+
   } catch (error) {
-    console.error('ATS analysis error:', error);
+    logger.error({ route: 'app/api/analyze-ats/route.ts' }, 'ATS analysis error:', error);
     return NextResponse.json(
       { error: 'Failed to analyze resume. Please try again.' },
       { status: 500 }
     );
   }
 }
+

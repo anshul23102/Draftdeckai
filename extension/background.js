@@ -4,6 +4,14 @@
 // Import MCP Server
 import { mcpServer } from './mcp-server.js';
 
+const DEBUG = false;
+const Logger = {
+    debug: (...args) => { if (DEBUG) console.debug(...args); },
+    info: (...args) => { if (DEBUG) console.info(...args); },
+    warn: (...args) => { if (DEBUG) console.warn(...args); },
+    error: (...args) => { console.error(...args); }
+};
+
 // Storage keys
 const STORAGE_KEYS = {
     AI_PROVIDER: 'ai_provider',
@@ -24,7 +32,7 @@ const API_URLS = {
 // Installation
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
-        console.log('DraftDeckAI Smart Extension installed!');
+        Logger.info('DraftDeckAI Smart Extension installed!');
 
         // Initialize storage
         chrome.storage.local.set({
@@ -126,7 +134,7 @@ Format your response as JSON with keys: approach, code, timeComplexity, spaceCom
         showNotification('Solution Ready! ✅', 'Check the page for your solution.');
 
     } catch (error) {
-        console.error('Failed to solve problem:', error);
+        Logger.error('Failed to solve problem:', error);
         showNotification('Error', error.message || 'Failed to solve problem. Please try again.');
     }
 }
@@ -161,7 +169,7 @@ Format as JSON with keys: explanation, complexity, improvements`;
         showNotification('Explanation Ready! 💡', 'Check the page for code explanation.');
 
     } catch (error) {
-        console.error('Failed to explain code:', error);
+        Logger.error('Failed to explain code:', error);
         showNotification('Error', error.message || 'Failed to explain code.');
     }
 }
@@ -190,7 +198,7 @@ Provide a hint that guides thinking without revealing the answer.`;
         showNotification('Hint Ready! 🎯', 'Check the page for your hint.');
 
     } catch (error) {
-        console.error('Failed to get hint:', error);
+        Logger.error('Failed to get hint:', error);
         showNotification('Error', error.message || 'Failed to get hint.');
     }
 }
@@ -239,12 +247,11 @@ async function callAI(provider, apiKey, prompt) {
 
 // Gemini AI API Call
 async function callGeminiAPI(apiKey, prompt) {
-    const url = `${API_URLS.gemini}?key=${apiKey}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(API_URLS.gemini, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
         },
         body: JSON.stringify({
             contents: [{
@@ -255,11 +262,11 @@ async function callGeminiAPI(apiKey, prompt) {
 
     if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error ? .message || 'Gemini API request failed');
+        throw new Error(error.error?.message || 'Gemini API request failed');
     }
 
     const data = await response.json();
-    const text = data.candidates[0] ? .content ? .parts[0] ? .text || '';
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     return parseAIResponse(text);
 }
@@ -284,11 +291,11 @@ async function callOpenAIAPI(apiKey, prompt) {
 
     if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error ? .message || 'OpenAI API request failed');
+        throw new Error(error.error?.message || 'OpenAI API request failed');
     }
 
     const data = await response.json();
-    const text = data.choices[0] ? .message ? .content || '';
+    const text = data.choices?.[0]?.message?.content || '';
 
     return parseAIResponse(text);
 }
@@ -316,7 +323,7 @@ async function callMistralAPI(apiKey, prompt) {
     }
 
     const data = await response.json();
-    const text = data.choices[0] ? .message ? .content || '';
+    const text = data.choices?.[0]?.message?.content || '';
 
     return parseAIResponse(text);
 }
@@ -342,11 +349,11 @@ async function callClaudeAPI(apiKey, prompt) {
 
     if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error ? .message || 'Claude API request failed');
+        throw new Error(error.error?.message || 'Claude API request failed');
     }
 
     const data = await response.json();
-    const text = data.content[0] ? .text || '';
+    const text = data.content?.[0]?.text || '';
 
     return parseAIResponse(text);
 }
@@ -394,6 +401,12 @@ async function getProviderAndKey() {
 
 // Message handling
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+
+    if (!sender || !sender.id || sender.id !== chrome.runtime.id)  {
+        sendResponse({ error: 'Unauthorized sender' });
+        return false;
+    }
+    
     if (request.type === 'INCREMENT_STAT') {
         incrementStat(request.stat, request.count);
         sendResponse({ success: true });
@@ -450,7 +463,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.type === 'SETTINGS_UPDATED') {
-        console.log('Settings updated, reloading configuration...');
+        Logger.debug('Settings updated, reloading configuration...');
         sendResponse({ success: true });
         return true;
     }
@@ -534,7 +547,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // MCP analysis complete
     if (request.type === 'MCP_ANALYSIS_COMPLETE') {
-        console.log('📊 MCP Analysis received:', request.analysis);
+        Logger.debug('📊 MCP Analysis received');
         // Store analysis for use by other components
         chrome.storage.local.set({ last_mcp_analysis: request.analysis });
         sendResponse({ success: true });
@@ -543,7 +556,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // Interview mode messages
     if (request.type === 'START_INTERVIEW') {
-        console.log('🎤 Starting interview mode...');
+        Logger.debug('🎤 Starting interview mode...');
         sendResponse({ success: true, message: 'Interview mode started' });
         return true;
     }
@@ -573,4 +586,4 @@ chrome.commands.onCommand.addListener((command) => {
     }
 });
 
-console.log('DraftDeckAI Smart AI Extension loaded - Ready to help! 🚀');
+Logger.info('DraftDeckAI Smart AI Extension loaded - Ready to help! 🚀');
