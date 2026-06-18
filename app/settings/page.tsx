@@ -7,11 +7,13 @@ import { useTheme } from '@/hooks/use-theme';
 import { useUsageStats } from '@/hooks/use-usage-stats';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Settings, Sparkles, Zap, Sun, Moon, Laptop, BarChart3, FileText, Layout, TrendingUp } from 'lucide-react';
+import { Settings, Sparkles, Zap, Sun, Moon, Laptop, BarChart3, FileText, Layout, TrendingUp, Upload, Rocket, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Bell, BellOff } from 'lucide-react';
+import { useOnboarding } from '@/hooks/use-onboarding';
+import { useToast } from '@/hooks/use-toast';
 import { logger } from "@/lib/logger";
 
 export default function SettingsPage() {
@@ -67,7 +69,7 @@ export default function SettingsPage() {
     }
   };
 
-
+  const restartOnboarding = async () => {
     try {
       await onboarding.reset();
       router.push("/onboarding");

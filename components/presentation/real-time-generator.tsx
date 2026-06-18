@@ -1720,9 +1720,7 @@ export default function RealTimeGenerator() {
         data: { session },
       } = await supabase.auth.getSession();
       // Request notification permissions for long-running task
-      requestNotificationPermission().catch(console.error);
 
-      const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error("Please sign in to create presentations.");
       }
@@ -2017,9 +2015,6 @@ export default function RealTimeGenerator() {
       <div className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-b border-border z-50 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div
-              className="flex items-center gap-3 cursor-pointer group"
-              onClick={() => !isStreaming && setView("dashboard")}
             <div 
               className="flex items-center gap-3 cursor-pointer group" 
               onClick={() => !isStreaming && setView('dashboard')}

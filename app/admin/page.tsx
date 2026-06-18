@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServer } from '@/lib/supabase/server';
 
 export default async function AdminOverviewPage() {
-  const supabase = await createClient();
+  const supabase = await createServer();
 
   const { count: userCount } = await supabase
     .from('profiles')

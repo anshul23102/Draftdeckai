@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServer } from '@/lib/supabase/server';
 
 export default async function AdminUsersPage() {
-  const supabase = await createClient();
+  const supabase = await createServer();
 
   const { data: users } = await supabase
     .from('profiles')

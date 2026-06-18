@@ -85,10 +85,11 @@ export function useAIEditLoop({
         "Content-Type": "application/json",
         ...customHeaders,
       };
+      const updatedMessages = [...messages, userMsg];
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
-        body: JSON.stringify(buildBody(text, messages)),
+        body: JSON.stringify(buildBody(text, updatedMessages)),
       });
 
       if (!response.ok) {
@@ -130,6 +131,7 @@ export function useAIEditLoop({
     buildBody,
     messages,
     parseResponse,
+    getHeaders,
     onData,
     successMessage,
     errorMessage,
