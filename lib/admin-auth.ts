@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServer as createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 
 export async function requireAdmin() {
