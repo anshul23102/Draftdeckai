@@ -5,6 +5,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +16,7 @@ import (
 type contextKey string
 
 const RequestIDKey contextKey = "request_id"
+const defaultAllowedOrigins = "http://localhost:3000"
 
 // GetRequestID retrieves the request ID from context.
 func GetRequestID(ctx context.Context) string {
@@ -49,6 +52,7 @@ func RequestLogger(next http.Handler) http.Handler {
 		// Generate unique request ID
 		requestID := uuid.NewString()
 		ctx := context.WithValue(r.Context(), RequestIDKey, requestID)
+		ctx = context.WithValue(ctx, "request_id", requestID)
 		r = r.WithContext(ctx)
 
 		// Set request ID in response header for client tracing
@@ -91,4 +95,67 @@ func Recoverer(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequestID preserves the short middleware name used by router setup and tests.
+func RequestID(next http.Handler) http.Handler {
+	return RequestLogger(next)
+}
+
+// Recovery preserves the short middleware name used by router setup and tests.
+func Recovery(next http.Handler) http.Handler {
+	return Recoverer(next)
+}
+
+func allowedOrigins() []string {
+	rawOrigins := os.Getenv("ALLOWED_ORIGINS")
+	if rawOrigins == "" {
+		rawOrigins = defaultAllowedOrigins
+	}
+
+	origins := strings.Split(rawOrigins, ",")
+	allowed := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed != "" {
+			allowed = append(allowed, trimmed)
+		}
+	}
+	return allowed
+}
+
+func originAllowed(origin string, allowedOrigins []string) bool {
+	for _, allowed := range allowedOrigins {
+		if allowed == "*" || allowed == origin {
+			return true
+		}
+	}
+	return false
+}
+
+// CORS adds origin allowlisted cross-origin headers and handles OPTIONS preflight.
+func CORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && originAllowed(origin, allowedOrigins()) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+		}
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Timeout cancels slow requests and returns 503 when the deadline is exceeded.
+func Timeout(duration time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.TimeoutHandler(next, duration, "request timeout")
+	}
 }
