@@ -3109,3 +3109,106 @@ section {
 /* ============================================
    END LATEX PREVIEW STYLES
    ============================================ */
+
+/* ============================================
+   PROFESSIONAL NAVBAR REDESIGN STYLES
+   Modern SaaS Navigation System
+   ============================================ */
+
+@layer components {
+    /* Desktop Navigation Links */
+    .nav-link {
+        @apply relative px-3 py-2 text-sm font-medium text-muted-foreground rounded-lg transition-all duration-200;
+        @apply hover:text-foreground hover:bg-accent/50;
+    }
+
+    .nav-link-active {
+        @apply text-foreground bg-accent/70;
+    }
+
+    /* Dropdown Trigger Buttons */
+    .nav-trigger {
+        @apply flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground rounded-lg transition-all duration-200;
+        @apply hover:text-foreground hover:bg-accent/50;
+        @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    }
+
+    .nav-trigger-active {
+        @apply text-foreground bg-accent/70;
+    }
+
+    /* Mobile Menu Sections */
+    .mobile-section-header {
+        @apply flex items-center justify-between w-full px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground;
+        @apply hover:text-foreground transition-colors duration-200;
+        @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg;
+    }
+
+    .mobile-section-label {
+        @apply px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground;
+    }
+
+    .mobile-section-body {
+        @apply grid transition-all duration-300 ease-in-out;
+        grid-template-rows: 0fr;
+    }
+
+    .mobile-section-body-open {
+        grid-template-rows: 1fr;
+    }
+
+    .mobile-section-body > * {
+        @apply overflow-hidden;
+    }
+
+    /* Mobile Navigation Items */
+    .mobile-nav-item {
+        @apply flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200;
+        @apply hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    }
+
+    .mobile-nav-item-simple {
+        @apply flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200;
+        @apply hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    }
+
+    .mobile-nav-item-active {
+        @apply bg-accent text-foreground font-semibold;
+    }
+}
+
+/* Navbar backdrop blur - enhanced for modern browsers */
+.nav-professional {
+    @apply supports-[backdrop-filter]:bg-background/80;
+}
+
+/* Smooth height transitions for mobile accordion */
+.mobile-section-body {
+    transition: grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced focus states for accessibility */
+.nav-link:focus-visible,
+.nav-trigger:focus-visible,
+.mobile-nav-item:focus-visible,
+.mobile-nav-item-simple:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2;
+}
+
+/* Credits badge glow animation */
+@keyframes credits-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(234, 179, 8, 0);
+    }
+}
+
+.credits-low {
+    animation: credits-pulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   END PROFESSIONAL NAVBAR REDESIGN STYLES
+   ============================================ */
