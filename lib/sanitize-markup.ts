@@ -15,14 +15,14 @@
  * bypasses regex-based blocklists.
  */
 
-import DOMPurify from "dompurify";
+import DOMPurify, { type Config } from "dompurify";
 
 // DOMPurify's default config already allows the full safe HTML + SVG tag
 // set (needed for svg_code diagrams and html_tailwind mockups) while
 // stripping <script>, event-handler attributes, and javascript:/data: URIs
 // in dangerous contexts. We additionally forbid a few embedding vectors
 // that have no legitimate use in a generated slide visual.
-const SANITIZE_CONFIG: DOMPurify.Config = {
+const SANITIZE_CONFIG: Config = {
   FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "base", "meta"],
   FORBID_ATTR: ["srcdoc"],
   ALLOW_DATA_ATTR: false,
