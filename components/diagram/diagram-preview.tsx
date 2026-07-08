@@ -101,6 +101,15 @@ export function DiagramPreview({
           theme: "base",
           securityLevel: "loose",
           fontFamily: "Inter, system-ui, sans-serif",
+          // mermaid 11's node-shape label rendering reads `htmlLabels` from
+          // the top level of the config, not `flowchart.htmlLabels` (that
+          // nested path is deprecated and, for node labels specifically,
+          // has no fallback to the top-level value - only edge labels fall
+          // back via getEffectiveHtmlLabels()). Verified directly against
+          // mermaid@11.16.0: nesting this under `flowchart` is a silent
+          // no-op, foreignObject-based labels are still emitted regardless
+          // of the nested value. Must be set here to actually take effect.
+          htmlLabels: !isLargeDiagram,
           themeVariables: {
             primaryColor: card,
             primaryTextColor: foreground,
@@ -138,12 +147,6 @@ export function DiagramPreview({
           },
           flowchart: {
             useMaxWidth: false,
-            // htmlLabels uses foreignObject + real DOM text measurement for
-            // each node, which mermaid's own docs note is significantly
-            // slower for large graphs. Native SVG <text> layout is faster
-            // and is the biggest lever we have for cutting main-thread time
-            // on large diagrams without a Worker (see comment above).
-            htmlLabels: !isLargeDiagram,
             curve: "basis",
             padding: 20,
             nodeSpacing: 50,
