@@ -205,14 +205,14 @@
     "*.{json,css,md,mdx,yml,yaml}": "prettier --write"
   },
   "overrides": {
-    "@babel/plugin-transform-modules-systemjs": "7.29.0",
+    "@babel/plugin-transform-modules-systemjs": "7.29.7",
     "@tootallnate/once": "3.0.1",
     "@xmldom/xmldom": "0.8.13",
     "basic-ftp": "5.3.1",
     "brace-expansion": "2.0.3",
-    "dompurify": "3.4.3",
+    "dompurify": "3.4.11",
     "fast-uri": "3.1.2",
-    "file-type": "16.5.4",
+    "file-type": "21.3.4",
     "flatted": "3.4.2",
     "handlebars": "4.7.9",
     "libqp": "2.1.0",
@@ -222,6 +222,6 @@
     "serialize-javascript": "7.0.5",
     "tar": "7.5.11",
     "underscore": "1.13.8",
-    "undici": "6.24.0"
+    "undici": "6.27.0"
   }
 }
