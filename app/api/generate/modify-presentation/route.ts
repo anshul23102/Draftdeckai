@@ -1,21 +1,24 @@
-import { logger } from '@/lib/logger';
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+import { logger } from "@/lib/logger";
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
-import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 function extractJsonFromMarkdown(text: string): string {
   // Remove markdown code blocks
-  let cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  
+  let cleaned = text
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
+
   // Try to find JSON object/array
   const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
   if (jsonMatch) {
     return jsonMatch[0];
   }
-  
+
   return cleaned;
 }
 
@@ -24,41 +27,35 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { slides, instruction, template, originalPrompt } = body;
 
-    // console.log('Modify presentation request:', { 
-    //   slideCount: slides?.length, 
-    //   instruction, 
-    //   template 
-    // });
-
     if (!slides || !instruction) {
       return NextResponse.json(
-        { error: 'Missing slides or instruction' },
-        { status: 400 }
+        { error: "Missing slides or instruction" },
+        { status: 400 },
       );
     }
 
     if (!process.env.GOOGLE_API_KEY) {
       return NextResponse.json(
-        { error: 'Google API key not configured' },
-        { status: 500 }
+        { error: "Google API key not configured" },
+        { status: 500 },
       );
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash-exp",
       generationConfig: {
         temperature: 0.7,
         topP: 0.95,
         topK: 40,
         maxOutputTokens: 8192,
-      }
+      },
     });
 
     // Simplify slides for the prompt (remove base64 images to reduce token count)
     const simplifiedSlides = slides.map((slide: any) => ({
       ...slide,
-      image: slide.image ? '[IMAGE_DATA]' : undefined
+      image: slide.image ? "[IMAGE_DATA]" : undefined,
     }));
 
     const prompt = `You are an expert presentation editor. Modify the presentation based on the user's instruction.
@@ -88,12 +85,9 @@ Return ONLY a valid JSON object (no markdown, no code blocks):
 
 IMPORTANT: Return ONLY the JSON object, nothing else.`;
 
-    // console.log('Sending request to Gemini...');
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text();
-    
-    // console.log('Raw response from Gemini:', text.substring(0, 200));
 
     // Extract and clean JSON
     text = extractJsonFromMarkdown(text);
@@ -103,41 +97,59 @@ IMPORTANT: Return ONLY the JSON object, nothing else.`;
     try {
       data = JSON.parse(text);
     } catch (parseError) {
-      logger.error({ route: 'app/api/generate/modify-presentation/route.ts' }, 'JSON parse error:', parseError);
-      logger.error({ route: 'app/api/generate/modify-presentation/route.ts' }, 'Text that failed to parse:', text.substring(0, 500));
-      throw new Error('Failed to parse AI response as JSON');
+      logger.error(
+        { route: "app/api/generate/modify-presentation/route.ts" },
+        "JSON parse error:",
+        parseError,
+      );
+      logger.error(
+        { route: "app/api/generate/modify-presentation/route.ts" },
+        "Text that failed to parse:",
+        text.substring(0, 500),
+      );
+      throw new Error("Failed to parse AI response as JSON");
     }
 
     // Restore original images in modified slides
     if (data.modifiedSlides) {
-      data.modifiedSlides = data.modifiedSlides.map((modifiedSlide: any, index: number) => {
-        const originalSlide = slides[index];
-        return {
-          ...modifiedSlide,
-          image: modifiedSlide.image === '[IMAGE_DATA]' && originalSlide 
-            ? originalSlide.image 
-            : modifiedSlide.image
-        };
-      });
+      data.modifiedSlides = data.modifiedSlides.map(
+        (modifiedSlide: any, index: number) => {
+          const originalSlide = slides[index];
+          return {
+            ...modifiedSlide,
+            image:
+              modifiedSlide.image === "[IMAGE_DATA]" && originalSlide
+                ? originalSlide.image
+                : modifiedSlide.image,
+          };
+        },
+      );
     }
 
-    // console.log('Successfully modified presentation');
     return NextResponse.json(data);
-
   } catch (error) {
-    logger.error({ route: 'app/api/generate/modify-presentation/route.ts' }, 'Error modifying presentation:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorStack = error instanceof Error ? error.stack : '';
-    
-    logger.error({ route: 'app/api/generate/modify-presentation/route.ts' }, 'Error details:', { errorMessage, errorStack });
-    
+    logger.error(
+      { route: "app/api/generate/modify-presentation/route.ts" },
+      "Error modifying presentation:",
+      error,
+    );
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    const errorStack = error instanceof Error ? error.stack : "";
+
+    logger.error(
+      { route: "app/api/generate/modify-presentation/route.ts" },
+      "Error details:",
+      { errorMessage, errorStack },
+    );
+
     return NextResponse.json(
-      { 
-        error: 'Failed to modify presentation', 
+      {
+        error: "Failed to modify presentation",
         details: errorMessage,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

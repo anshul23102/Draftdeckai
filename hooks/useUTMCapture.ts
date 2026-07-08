@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { logger } from "@/lib/logger";
 
 export function useUTMCapture() {
   const searchParams = useSearchParams();
@@ -14,7 +15,13 @@ export function useUTMCapture() {
     if (!searchParams) return;
 
     // The standard UTM tags marketers use
-    const utmTags = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
+    const utmTags = [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+    ];
     let foundUTMs = false;
     const currentUTMs: Record<string, string> = {};
 
@@ -31,7 +38,11 @@ export function useUTMCapture() {
     // They will stay here until the user closes the tab or signs up.
     if (foundUTMs) {
       sessionStorage.setItem("draftdeck_utms", JSON.stringify(currentUTMs));
-      console.log("UTMs captured and stored!", currentUTMs); // Keep this for our local testing
+      logger.debug(
+        { route: "hooks/useUTMCapture.ts" },
+        "UTMs captured and stored!",
+        currentUTMs,
+      );
     }
   }, [searchParams]);
 }

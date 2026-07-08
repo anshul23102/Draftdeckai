@@ -1,5 +1,5 @@
-import { logger } from '@/lib/logger';
-import { NextResponse } from 'next/server';
+import { logger } from "@/lib/logger";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
@@ -8,11 +8,9 @@ export async function POST(req: Request) {
     if (!resumeData || !userMessage) {
       return NextResponse.json(
         { error: "Resume data and message are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-
-    // console.log('🤖 AI Improvement request:', userMessage);
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -21,30 +19,44 @@ export async function POST(req: Request) {
       throw new Error("AI API key not configured");
     }
 
-    const result = geminiApiKey 
-      ? await improveWithGemini(geminiApiKey, resumeData, userMessage, conversationHistory)
-      : await improveWithOpenAI(openaiApiKey!, resumeData, userMessage, conversationHistory);
+    const result = geminiApiKey
+      ? await improveWithGemini(
+          geminiApiKey,
+          resumeData,
+          userMessage,
+          conversationHistory,
+        )
+      : await improveWithOpenAI(
+          openaiApiKey!,
+          resumeData,
+          userMessage,
+          conversationHistory,
+        );
 
     return NextResponse.json(result);
-
   } catch (error: any) {
-    logger.error({ route: 'app/api/resume/improve/route.ts' }, "AI improvement error:", error);
+    logger.error(
+      { route: "app/api/resume/improve/route.ts" },
+      "AI improvement error:",
+      error,
+    );
     return NextResponse.json(
       { error: error.message || "Failed to generate improvements" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 async function improveWithGemini(
-  apiKey: string, 
-  resumeData: any, 
+  apiKey: string,
+  resumeData: any,
   userMessage: string,
-  conversationHistory: any[]
+  conversationHistory: any[],
 ): Promise<any> {
-  const historyContext = conversationHistory?.length > 0
-    ? `\n\nPrevious conversation:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}`
-    : '';
+  const historyContext =
+    conversationHistory?.length > 0
+      ? `\n\nPrevious conversation:\n${conversationHistory.map((m) => `${m.role}: ${m.content}`).join("\n")}`
+      : "";
 
   const prompt = `You are an expert resume writer, ATS optimization specialist, and career coach. 
 Help improve this resume based on the user's request.
@@ -95,9 +107,9 @@ Examples of good advice:
           topK: 40,
           topP: 0.95,
           maxOutputTokens: 4096,
-        }
+        },
       }),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -105,8 +117,11 @@ Examples of good advice:
   }
 
   const data = await response.json();
-  let content = data.candidates[0]?.content?.parts[0]?.text || '';
-  content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  let content = data.candidates[0]?.content?.parts[0]?.text || "";
+  content = content
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
 
   return JSON.parse(content);
 }
@@ -115,18 +130,19 @@ async function improveWithOpenAI(
   apiKey: string,
   resumeData: any,
   userMessage: string,
-  conversationHistory: any[]
+  conversationHistory: any[],
 ): Promise<any> {
   const messages = [
     {
       role: "system",
-      content: "You are an expert resume writer and ATS optimization specialist. Provide specific, actionable advice and generate improved resume data when requested. Always return valid JSON."
+      content:
+        "You are an expert resume writer and ATS optimization specialist. Provide specific, actionable advice and generate improved resume data when requested. Always return valid JSON.",
     },
     ...(conversationHistory || []),
     {
       role: "user",
-      content: `Current Resume:\n${JSON.stringify(resumeData, null, 2)}\n\nUser Request: ${userMessage}`
-    }
+      content: `Current Resume:\n${JSON.stringify(resumeData, null, 2)}\n\nUser Request: ${userMessage}`,
+    },
   ];
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {

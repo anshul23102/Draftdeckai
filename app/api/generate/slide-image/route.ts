@@ -166,13 +166,13 @@ export async function POST(request: NextRequest) {
       const placeholderImages = Array(count)
         .fill(null)
         .map((_, i) => ({
-         url: getPlaceholderImage(
-  Number(size.split("x")[0]),
-  Number(size.split("x")[1]),
-  "6366F1",
-  "FFFFFF",
-  topic || "Image"
-),
+          url: getPlaceholderImage(
+            Number(size.split("x")[0]),
+            Number(size.split("x")[1]),
+            "6366F1",
+            "FFFFFF",
+            topic || "Image",
+          ),
           type: imageType,
           prompt: customPrompt || topic,
         }));
@@ -182,8 +182,6 @@ export async function POST(request: NextRequest) {
         fallback: true,
       });
     }
-
-    // console.log(`🎨 Generating ${count} ${imageType} image(s) for: "${topic || customPrompt}"`);
 
     // Parse size
     const [width, height] = size.split("x").map(Number);
@@ -254,8 +252,6 @@ export async function POST(request: NextRequest) {
     );
 
     const successCount = imageResults.filter((r) => r.success).length;
-
-    // console.log(`✅ Generated ${successCount}/${count} images successfully`);
 
     return Response.json({
       images: imageResults,

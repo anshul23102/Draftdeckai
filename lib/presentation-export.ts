@@ -1,5 +1,6 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { logger } from "@/lib/logger";
 import {
   SLIDE_LAYOUT,
   PAD,
@@ -45,8 +46,8 @@ async function waitForSlideResources(element: HTMLElement): Promise<void> {
             const done = () => resolve();
             img.onload = done;
             img.onerror = done;
-          })
-    )
+          }),
+    ),
   );
 
   if (typeof document !== "undefined" && document.fonts?.ready) {
@@ -61,7 +62,8 @@ async function waitForSlideResources(element: HTMLElement): Promise<void> {
 }
 
 function getPdfPageSize(options?: PDFExportOptions) {
-  const orientation = options?.orientation === "portrait" ? "portrait" : "landscape";
+  const orientation =
+    options?.orientation === "portrait" ? "portrait" : "landscape";
 
   if (options?.targetSize) {
     return {
@@ -75,7 +77,7 @@ function getPdfPageSize(options?: PDFExportOptions) {
 
 async function captureSlideCanvas(
   slideElement: HTMLElement,
-  scale = 2
+  scale = 2,
 ): Promise<HTMLCanvasElement> {
   const clone = slideElement.cloneNode(true) as HTMLElement;
 
@@ -115,7 +117,7 @@ async function captureSlideCanvas(
  */
 export async function exportSlideAsPNG(
   slideElement: HTMLElement,
-  slideName: string = "slide"
+  slideName: string = "slide",
 ): Promise<void> {
   try {
     const canvas = await html2canvas(slideElement, {
@@ -127,17 +129,21 @@ export async function exportSlideAsPNG(
       proxy: "/api/proxy-image", // Use our proxy for external images
     });
 
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${slideName}.png`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    }, "image/png", 1.0);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${slideName}.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      },
+      "image/png",
+      1.0,
+    );
   } catch (error) {
     console.error("Error exporting slide as PNG:", error);
     throw new Error("Failed to export slide as PNG");
@@ -149,7 +155,7 @@ export async function exportSlideAsPNG(
  */
 export async function exportAllSlidesAsPNG(
   slideElements: HTMLElement[],
-  presentationName: string = "presentation"
+  presentationName: string = "presentation",
 ): Promise<void> {
   if (!slideElements.length) {
     throw new Error("No slides to export");
@@ -169,13 +175,17 @@ export async function exportAllSlidesAsPNG(
       });
 
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => {
-          if (!b) {
-            reject(new Error("Unable to create image blob"));
-            return;
-          }
-          resolve(b);
-        }, "image/png", 1.0);
+        canvas.toBlob(
+          (b) => {
+            if (!b) {
+              reject(new Error("Unable to create image blob"));
+              return;
+            }
+            resolve(b);
+          },
+          "image/png",
+          1.0,
+        );
       });
 
       zip.file(`slide-${i + 1}.png`, blob);
@@ -201,14 +211,19 @@ export async function exportAllSlidesAsPNG(
 export async function exportAsPDF(
   slideElements: HTMLElement[],
   presentationName: string = "presentation",
-  options: PDFExportOptions = { format: "pdf", quality: 2, orientation: "landscape" }
+  options: PDFExportOptions = {
+    format: "pdf",
+    quality: 2,
+    orientation: "landscape",
+  },
 ): Promise<void> {
   if (!slideElements.length) {
     throw new Error("No slides to export");
   }
 
   const pageSize = getPdfPageSize(options);
-  const orientation = options.orientation === "portrait" ? "portrait" : "landscape";
+  const orientation =
+    options.orientation === "portrait" ? "portrait" : "landscape";
   const pdf = new jsPDF({
     orientation,
     unit: "px",
@@ -219,7 +234,10 @@ export async function exportAsPDF(
 
   try {
     for (let i = 0; i < slideElements.length; i++) {
-      const canvas = await captureSlideCanvas(slideElements[i], options.quality ?? 2);
+      const canvas = await captureSlideCanvas(
+        slideElements[i],
+        options.quality ?? 2,
+      );
       const imgData = canvas.toDataURL("image/png", 1.0);
 
       if (i > 0) {
@@ -240,7 +258,16 @@ export async function exportAsPDF(
       const offsetX = Math.round((pageSize.width - drawWidth) / 2);
       const offsetY = Math.round((pageSize.height - drawHeight) / 2);
 
-      pdf.addImage(imgData, "PNG", offsetX, offsetY, drawWidth, drawHeight, undefined, "MEDIUM");
+      pdf.addImage(
+        imgData,
+        "PNG",
+        offsetX,
+        offsetY,
+        drawWidth,
+        drawHeight,
+        undefined,
+        "MEDIUM",
+      );
     }
 
     pdf.save(`${presentationName}.pdf`);
@@ -278,7 +305,10 @@ function normalizeHex(hex: string): string {
   hex = hex.replace("#", "").trim();
 
   if (hex.length === 3) {
-    hex = hex.split("").map((char) => char + char).join("");
+    hex = hex
+      .split("")
+      .map((char) => char + char)
+      .join("");
   }
 
   return hex.toUpperCase();
@@ -291,7 +321,7 @@ export async function exportAsPPTX(
   slideElements: HTMLElement[],
   presentationName: string = "presentation",
   slides?: any[],
-  theme?: any
+  theme?: any,
 ): Promise<void> {
   try {
     const PptxGenJS = (await import("pptxgenjs")).default;
@@ -307,10 +337,19 @@ export async function exportAsPPTX(
     let globalBgColor = "FFFFFF";
     let globalTextColor = "000000";
 
-    console.log("🎨 Exporting PPTX with theme:", theme);
+    logger.debug(
+      { route: "lib/presentation-export.ts" },
+      "🎨 Exporting PPTX with theme:",
+      theme,
+    );
 
     if (theme && theme.colors) {
-      if (theme.id === "alien" || theme.id === "fluo" || theme.id === "vortex" || theme.type === "dark") {
+      if (
+        theme.id === "alien" ||
+        theme.id === "fluo" ||
+        theme.id === "vortex" ||
+        theme.type === "dark"
+      ) {
         if (theme.id === "alien") globalBgColor = "000000";
         else if (theme.id === "fluo") globalBgColor = "111111";
         else if (theme.id === "vortex") globalBgColor = "020617";
@@ -323,17 +362,30 @@ export async function exportAsPPTX(
       }
     }
 
-    console.log("🎨 Calculated Colors - BG:", globalBgColor, "Text:", globalTextColor);
+    logger.debug(
+      { route: "lib/presentation-export.ts" },
+      "🎨 Calculated Colors - BG:",
+      globalBgColor,
+      "Text:",
+      globalTextColor,
+    );
 
     if (globalBgColor === "FFFFFF" && globalTextColor === "FFFFFF") {
       globalTextColor = "000000";
     }
-    if ((globalBgColor === "000000" || globalBgColor === "111111" || globalBgColor === "020617") && globalTextColor === "000000") {
+    if (
+      (globalBgColor === "000000" ||
+        globalBgColor === "111111" ||
+        globalBgColor === "020617") &&
+      globalTextColor === "000000"
+    ) {
       globalTextColor = "FFFFFF";
     }
 
     if (!slides || slides.length === 0) {
-      console.warn("No structured slide data provided, falling back to image capture");
+      console.warn(
+        "No structured slide data provided, falling back to image capture",
+      );
       for (let i = 0; i < slideElements.length; i++) {
         const canvas = await html2canvas(slideElements[i], {
           scale: 2,
@@ -403,7 +455,9 @@ export async function exportAsPPTX(
 
         const bodyY = slideData.subtitle ? 2.6 : 2.0;
         const bodyW = hasImage ? SPLIT.textW : SAFE.w;
-        const bodyH = hasImage ? CONTENT.bullets_split.h : CONTENT.bullets_full.h;
+        const bodyH = hasImage
+          ? CONTENT.bullets_split.h
+          : CONTENT.bullets_full.h;
 
         if (slideData.content) {
           const bodyFit = fitTextInBox({
@@ -441,7 +495,11 @@ export async function exportAsPPTX(
           });
           const bulletItems = slideData.bullets.map((b: string) => ({
             text: b,
-            options: { fontSize: bulletFit.fontSize, color: textColor, breakLine: true },
+            options: {
+              fontSize: bulletFit.fontSize,
+              color: textColor,
+              breakLine: true,
+            },
           }));
           slide.addText(bulletItems, {
             x: PAD.left,
@@ -468,7 +526,11 @@ export async function exportAsPPTX(
                 y: CONTENT.image.y,
                 w: CONTENT.image.w,
                 h: CONTENT.image.h,
-                sizing: { type: "contain", w: CONTENT.image.w, h: CONTENT.image.h },
+                sizing: {
+                  type: "contain",
+                  w: CONTENT.image.w,
+                  h: CONTENT.image.h,
+                },
               });
             }
           } catch (err) {
@@ -493,7 +555,7 @@ export async function exportPresentation(
   presentationName: string,
   options: ExportOptions,
   slides?: any[],
-  theme?: any
+  theme?: any,
 ): Promise<void> {
   if (slideElements.length === 0) {
     throw new Error("No slides to export");

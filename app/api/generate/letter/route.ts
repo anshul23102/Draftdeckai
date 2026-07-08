@@ -1,4 +1,4 @@
-import { logger } from '@/lib/logger';
+import { logger } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60; // Allow 60 seconds for AI generation (Vercel Hobby limit)
@@ -9,11 +9,11 @@ import {
   generateCoverLetterFromJob,
 } from "@/lib/mistral";
 import { createClient } from "@supabase/supabase-js";
+import { ACTION_COSTS, calculateRemainingCredits } from "@/lib/credits-service";
 import {
-  ACTION_COSTS,
-  calculateRemainingCredits,
-} from "@/lib/credits-service";
-import { hasUnlimitedDeveloperCredits, logDeveloperCreditBypass } from "@/lib/developer-credit-bypass";
+  hasUnlimitedDeveloperCredits,
+  logDeveloperCreditBypass,
+} from "@/lib/developer-credit-bypass";
 import {
   reserveCredits,
   refundCredits,
@@ -24,7 +24,10 @@ import {
   RequestValidationError,
   safeParseBody,
 } from "@/lib/validation";
-import { getCachedUserCredits, invalidateUserCredits } from "@/lib/cached-queries";
+import {
+  getCachedUserCredits,
+  invalidateUserCredits,
+} from "@/lib/cached-queries";
 
 // Service role client for credit operations
 const supabaseAdmin = createClient(
@@ -99,15 +102,19 @@ export async function POST(request: Request) {
     // user_credits row, so a malformed request must be rejected first.
     if (!isCoverLetter && (!prompt || !fromName || !toName || !letterType)) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
+        { error: "Missing required fields" },
+        { status: 400 },
       );
     }
 
     // Check user credits
     const creditCost = ACTION_COSTS[actionType];
     if (hasUnlimitedCredits) {
-      logDeveloperCreditBypass({ userId: user.id, email: user.email, action: actionType });
+      logDeveloperCreditBypass({
+        userId: user.id,
+        email: user.email,
+        action: actionType,
+      });
     }
 
     // Get or create user credits (cached, 15 s TTL)
@@ -160,8 +167,6 @@ export async function POST(request: Request) {
 
     // Cover-letter branch
     if (isCoverLetter) {
-      // console.log("📝 Generating cover letter from job description with Mistral...");
-      
       const coverJobDescription = jobDescription as string;
       const coverFromName = fromName as string;
 
@@ -191,15 +196,21 @@ export async function POST(request: Request) {
       if (!hasUnlimitedCredits) {
         supabaseAdmin
           .from("credit_usage_log")
-          .insert({ user_id: user.id, action_type: actionType, credits_used: creditCost, metadata: { type: "cover_letter", has_job_description: true } })
-          .then(({ error }) => { if (error) console.error("Failed to log credit usage:", error); });
+          .insert({
+            user_id: user.id,
+            action_type: actionType,
+            credits_used: creditCost,
+            metadata: { type: "cover_letter", has_job_description: true },
+          })
+          .then(({ error }) => {
+            if (error) console.error("Failed to log credit usage:", error);
+          });
       }
 
       return NextResponse.json(coverLetter);
     }
 
     // Standard letter generation
-    // console.log(`📝 Generating ${letterType} letter with Mistral...`);
     const standardPrompt = prompt as string;
     const standardFromName = fromName as string;
     const standardToName = toName as string;
@@ -240,26 +251,39 @@ export async function POST(request: Request) {
           month: "long",
           day: "numeric",
         }),
-      subject: letter.subject || "Re: " + standardPrompt.substring(0, 30) + "...",
+      subject:
+        letter.subject || "Re: " + standardPrompt.substring(0, 30) + "...",
       content: letter.content || "Letter content not available.",
     };
-
-    // console.log("✅ Letter generated successfully with Mistral");
 
     // Fire-and-forget: log write does not block the response
     if (!hasUnlimitedCredits) {
       supabaseAdmin
         .from("credit_usage_log")
-        .insert({ user_id: user.id, action_type: actionType, credits_used: creditCost, metadata: { letter_type: standardLetterType, prompt_length: standardPrompt.length } })
-        .then(({ error }) => { if (error) console.error("Failed to log credit usage:", error); });
+        .insert({
+          user_id: user.id,
+          action_type: actionType,
+          credits_used: creditCost,
+          metadata: {
+            letter_type: standardLetterType,
+            prompt_length: standardPrompt.length,
+          },
+        })
+        .then(({ error }) => {
+          if (error) console.error("Failed to log credit usage:", error);
+        });
     }
 
     return NextResponse.json(formattedResponse);
   } catch (error) {
-    logger.error({ route: 'app/api/generate/letter/route.ts' }, "Error generating letter:", error);
+    logger.error(
+      { route: "app/api/generate/letter/route.ts" },
+      "Error generating letter:",
+      error,
+    );
     return NextResponse.json(
-      { error: 'Failed to generate letter' },
-      { status: 500 }
+      { error: "Failed to generate letter" },
+      { status: 500 },
     );
   }
 }

@@ -1,10 +1,12 @@
-import { logger } from '@/lib/logger';
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { computeFinalScore, defaultEngagement } from "@/lib/showcase/ranking";
 import type { EngagementRaw } from "@/lib/showcase/ranking";
-import { BURST_LIKE_THRESHOLD, BURST_WINDOW_MINUTES } from "@/lib/showcase/ranking.config";
-
+import {
+  BURST_LIKE_THRESHOLD,
+  BURST_WINDOW_MINUTES,
+} from "@/lib/showcase/ranking.config";
 
 function isAuthorised(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -29,7 +31,10 @@ export async function GET(req: NextRequest) {
 
     if (postsError) throw postsError;
     if (!posts || posts.length === 0) {
-      return Response.json({ processed: 0, elapsed_ms: Date.now() - startedAt });
+      return Response.json({
+        processed: 0,
+        elapsed_ms: Date.now() - startedAt,
+      });
     }
 
     const postIds = posts.map((p: { id: string }) => p.id);
@@ -39,7 +44,10 @@ export async function GET(req: NextRequest) {
       .from("showcase_engagement_events")
       .select("post_id, event_type, dwell_ms")
       .in("post_id", postIds)
-      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString());
+      .gte(
+        "created_at",
+        new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString(),
+      );
     // Only count last 30 days of engagement — older signals fade naturally via freshness
 
     if (engError) throw engError;
@@ -52,10 +60,18 @@ export async function GET(req: NextRequest) {
       }
       const e = engMap.get(row.post_id)!;
       switch (row.event_type) {
-        case "like":  e.likes++;  break;
-        case "save":  e.saves++;  break;
-        case "share": e.shares++; break;
-        case "view":  e.views++;  break;
+        case "like":
+          e.likes++;
+          break;
+        case "save":
+          e.saves++;
+          break;
+        case "share":
+          e.shares++;
+          break;
+        case "view":
+          e.views++;
+          break;
         case "dwell":
           e.dwell_sum_ms += row.dwell_ms ?? 0;
           e.dwell_count++;
@@ -65,7 +81,7 @@ export async function GET(req: NextRequest) {
 
     // ── 3. Detect burst flags via recent like count ───────────────────────
     const burstWindow = new Date(
-      Date.now() - BURST_WINDOW_MINUTES * 60_000
+      Date.now() - BURST_WINDOW_MINUTES * 60_000,
     ).toISOString();
 
     const { data: burstRows, error: burstError } = await supabase
@@ -76,7 +92,11 @@ export async function GET(req: NextRequest) {
       .gte("created_at", burstWindow);
 
     if (burstError) {
-      logger.error({ route: 'app/api/jobs/ranking/route.ts' }, "[ranking-job] burst detection query failed:", burstError);
+      logger.error(
+        { route: "app/api/jobs/ranking/route.ts" },
+        "[ranking-job] burst detection query failed:",
+        burstError,
+      );
       throw burstError;
     }
 
@@ -102,19 +122,19 @@ export async function GET(req: NextRequest) {
       const breakdown = computeFinalScore({
         quality_score: post.quality_score,
         engagement,
-        created_at:    new Date(post.created_at),
+        created_at: new Date(post.created_at),
         // relevance is viewer-specific — not stored globally
       });
 
       return {
-        post_id:          post.id,
-        quality_score:    post.quality_score,
+        post_id: post.id,
+        quality_score: post.quality_score,
         engagement_score: breakdown.engagement.score,
-        freshness_score:  breakdown.freshness.score,
-        relevance_score:  null,
-        final_score:      breakdown.final_score,
-        score_breakdown:  breakdown,
-        updated_at:       new Date().toISOString(),
+        freshness_score: breakdown.freshness.score,
+        relevance_score: null,
+        final_score: breakdown.final_score,
+        score_breakdown: breakdown,
+        updated_at: new Date().toISOString(),
       };
     });
 
@@ -125,18 +145,20 @@ export async function GET(req: NextRequest) {
       const batch = scoreUpserts.slice(i, i + BATCH);
       const { error: upsertError } = await supabase
         .from("showcase_post_scores")
-        .upsert(batch as any , { onConflict: "post_id" });
+        .upsert(batch as any, { onConflict: "post_id" });
 
       if (upsertError) throw upsertError;
     }
 
     const elapsed_ms = Date.now() - startedAt;
-    // console.log(`[ranking-job] processed ${posts.length} posts in ${elapsed_ms}ms`);
 
     return Response.json({ processed: posts.length, elapsed_ms });
-
   } catch (err) {
-    logger.error({ route: 'app/api/jobs/ranking/route.ts' }, "[ranking-job] error:", err);
+    logger.error(
+      { route: "app/api/jobs/ranking/route.ts" },
+      "[ranking-job] error:",
+      err,
+    );
     return Response.json({ error: String(err) }, { status: 500 });
   }
 }
